@@ -412,6 +412,8 @@ router.post("/nearby-monthly", async (req, res) => {
   latitude,
   longitude,
   timeslot,
+  age,
+  housekeepingrole,
   (
     6371 * acos(
       cos(radians($1)) * cos(radians(latitude)) *
@@ -539,6 +541,8 @@ ORDER BY distance_km ASC
   pincode: p.pincode,
   latitude: p.latitude,
   longitude: p.longitude,
+  age : p.age,
+  housekeepingrole: p.housekeepingrole,
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
         monthlyAvailability: {
