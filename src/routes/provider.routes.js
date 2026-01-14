@@ -275,12 +275,12 @@ WHERE
 
 /**
  * @swagger
-* /api/service-providers/check-sp-email:
+* /api/service-providers/check-email:
 *   post:
-*     summary: check service provider email existence
-*     description: Check if a service provider email already exists in the system
+*     summary: check email existence
+*     description: Check if an email already exists in the system
 *     tags:
-*       - Service Providers
+*       - Utility
 *     requestBody:
 *       required: true
 *       content:
@@ -292,7 +292,7 @@ WHERE
 *             properties:
 *               email:
 *                 type: string
-*                 example: "abs@hot.com"
+*                 example: "diyashasingharoy@gmail.com"
 *     responses:
 *      200:
 *         description: Success
@@ -309,6 +309,43 @@ WHERE
 *      500:
 *         description: Internal server error
 */
+/**
+ * @swagger
+* /api/service-providers/check-mobile:
+*   post:
+*     summary: check mobile existence
+*     description: Check if a mobile number already exists in the system
+*     tags:
+*       - Utility
+*     requestBody:
+*       required: true
+*       content:
+*         application/json:
+*            schema:
+*             type: object
+*             required:
+*               - mobile
+*             properties:
+*               mobile:
+*                 type: string
+*                 example: "1236547854"
+*     responses:
+*      200:
+*         description: Success
+*         content:
+*           application/json:
+*             schema:
+*               type: object
+*               properties:
+*                 exists:
+*                   type: boolean
+*                   example: true
+*      400:
+*         description: Missing or invalid request parameters *
+*      500:
+*         description: Internal server error
+*/
+
 /* -------------------- ROUTE -------------------- */
 
 router.get("/nearby", async (req, res) => {
@@ -629,7 +666,7 @@ ORDER BY distance_km ASC
   }
 });
 
-router.post("/check-sp-email", async (req, res) => {
+router.post("/check-email", async (req, res) => {
   try {
     const { email } = req.body;
     if(!email) {
@@ -637,15 +674,44 @@ router.post("/check-sp-email", async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT COUNT(*) FROM serviceprovider WHERE emailid = $1`,
+      `SELECT EXISTS (
+        SELECT 1 FROM customer WHERE emailId = $1
+        UNION ALL
+        SELECT 1 FROM serviceprovider WHERE emailId = $1
+      ) As exists;`,
       [email]
     );
 
     res.json({
-      exists : result.rowCount > 0,
+      exists : result.rows[0].exists,
     });
   } catch (err) {
-    console.error("check-sp-email error:", err);
+    console.error("check-email error:", err);
+    res.status(500).json({ message: "Internal server error"});
+  }
+});
+
+router.post("/check-mobile", async (req, res) => {
+  try {
+    const { mobile } = req.body;
+    if(!mobile) {
+      return res.status(400).json({ message: "Mobile number is required" });
+    }
+
+    const result = await pool.query(
+      `SELECT EXISTS (
+        SELECT 1 FROM customer WHERE mobileno = $1
+        UNION ALL
+        SELECT 1 FROM serviceprovider WHERE mobileno = $1
+      ) As exists;`,
+      [mobile]
+    );
+
+    res.json({
+      exists : result.rows[0].exists,
+    });
+  } catch (err) {
+    console.error("check-mobile error:", err);
     res.status(500).json({ message: "Internal server error"});
   }
 });
