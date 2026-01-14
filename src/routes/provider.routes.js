@@ -273,6 +273,42 @@ WHERE
  */
 
 
+/**
+ * @swagger
+* /api/service-providers/check-sp-email:
+*   post:
+*     summary: check service provider email existence
+*     description: Check if a service provider email already exists in the system
+*     tags:
+*       - Service Providers
+*     requestBody:
+*       required: true
+*       content:
+*         application/json:
+*            schema:
+*             type: object
+*             required:
+*               - email
+*             properties:
+*               email:
+*                 type: string
+*                 example: "abs@hot.com"
+*     responses:
+*      200:
+*         description: Success
+*         content:
+*           application/json:
+*             schema:
+*               type: object
+*               properties:
+*                 exists:
+*                   type: boolean
+*                   example: true
+*      400:
+*         description: Missing or invalid request parameters *
+*      500:
+*         description: Internal server error
+*/
 /* -------------------- ROUTE -------------------- */
 
 router.get("/nearby", async (req, res) => {
@@ -590,6 +626,27 @@ ORDER BY distance_km ASC
   } catch (err) {
     console.error("❌ nearby-monthly error:", err);
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.post("/check-sp-email", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if(!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const result = await pool.query(
+      `SELECT COUNT(*) FROM serviceprovider WHERE emailid = $1`,
+      [email]
+    );
+
+    res.json({
+      exists : result.rowCount > 0,
+    });
+  } catch (err) {
+    console.error("check-sp-email error:", err);
+    res.status(500).json({ message: "Internal server error"});
   }
 });
 
