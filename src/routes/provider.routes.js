@@ -571,32 +571,82 @@ ORDER BY distance_km ASC
           overlaps(b.slot_start_epoch, b.slot_end_epoch, dayStart, dayEnd)
         );
 
-        const hasOnDemand = dayBookings.some(b => b.booking_type === "ON_DEMAND");
+        // const hasOnDemand = dayBookings.some(b => b.booking_type === "ON_DEMAND" ) ;
+        // 1️⃣ Check preferred time overlap
+const preferredEpoch = epochInIST(dateStr, preferredStartTime);
 
-        if (!hasOnDemand) {
-          daysAtPreferredTime++;
-          continue;
-        }
+const preferredBlocked = dayBookings.some(b =>
+  overlaps(
+    preferredEpoch,
+    preferredEpoch + durationSec,
+    b.slot_start_epoch,
+    b.slot_end_epoch
+  )
+);
+
+// 2️⃣ If preferred time works → success
+if (!preferredBlocked) {
+  daysAtPreferredTime++;
+  continue;
+}
+
+
+
+
+        // if (!hasOnDemand) {
+        //   daysAtPreferredTime++;
+        //   continue;
+        // }
+
+        // let alternate = null;
+        // for (let h = startH; h < endH; h++) {
+        //   const epoch = epochInIST(dateStr, String(h).padStart(2, "0"));
+        //   const blocked = dayBookings.some(b =>
+        //     overlaps(epoch, epoch + durationSec, b.slot_start_epoch, b.slot_end_epoch)
+        //   );
+        //   if (!blocked) {
+        //     alternate = `${String(h).padStart(2, "0")}:00`;
+        //     break;
+        //   }
+        // }
 
         let alternate = null;
-        for (let h = startH; h < endH; h++) {
-          const epoch = epochInIST(dateStr, String(h).padStart(2, "0"));
-          const blocked = dayBookings.some(b =>
-            overlaps(epoch, epoch + durationSec, b.slot_start_epoch, b.slot_end_epoch)
-          );
-          if (!blocked) {
-            alternate = `${String(h).padStart(2, "0")}:00`;
-            break;
-          }
-        }
+
+for (let h = startH; h < endH; h++) {
+  const epoch = epochInIST(dateStr, String(h).padStart(2, "0"));
+
+  const blocked = dayBookings.some(b =>
+    overlaps(
+      epoch,
+      epoch + durationSec,
+      b.slot_start_epoch,
+      b.slot_end_epoch
+    )
+  );
+
+  if (!blocked) {
+    alternate = `${String(h).padStart(2, "0")}:00`;
+    break;
+  }
+}
+
 
         if (alternate) {
-          daysWithDifferentTime++;
-          exceptions.push({ date: dateStr, reason: "ON_DEMAND", suggestedTime: alternate });
-        } else {
-          unavailableDays++;
-          exceptions.push({ date: dateStr, reason: "FULLY_BOOKED", suggestedTime: null });
-        }
+  daysWithDifferentTime++;
+  exceptions.push({
+    date: dateStr,
+    reason: "BOOKED", // not ON_DEMAND
+    suggestedTime: alternate
+  });
+} else {
+  unavailableDays++;
+  exceptions.push({
+    date: dateStr,
+    reason: "FULLY_BOOKED",
+    suggestedTime: null
+  });
+}
+
       }
 
       evaluatedProviders.push({
