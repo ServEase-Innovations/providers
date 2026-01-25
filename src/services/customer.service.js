@@ -1,4 +1,3 @@
-import db from "../config/db.js";
 import Customer from "../model/customer.model.js";
 
 export const getCustomerByIdService = async (customerId) => {

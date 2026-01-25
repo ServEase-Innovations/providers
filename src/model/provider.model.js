@@ -1,5 +1,6 @@
-import sequelize from "../config/database.js";
+import { sequelize } from "../config/database.js";
 import { DataTypes } from "sequelize";
+
 const Provider = sequelize.define("Provider", {
     serviceproviderid: {
         type: DataTypes.BIGINT,
