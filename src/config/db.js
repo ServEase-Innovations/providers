@@ -1,9 +1,7 @@
 import sequelize from "./database.js";
-import Customer from "../model/customer.model.js";
 
 const db = {};
 db.sequelize = sequelize;
-db.Customer = Customer;
 
 (async () => {
     try {
