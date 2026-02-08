@@ -1,6 +1,6 @@
 import { Router } from "express";
 import pg from "pg";
-import { getPaginatedProviders } from "../controllers/provider.controller.js";
+import { addProvider, getPaginatedProviders } from "../controllers/provider.controller.js";
 
 const router = Router();
 const { Pool } = pg;
@@ -768,6 +768,5 @@ router.post("/check-mobile", async (req, res) => {
 });
 
 router.get('/providers',getPaginatedProviders);
-
-
+router.post('/serviceprovider/add', addProvider)
 export default router;
