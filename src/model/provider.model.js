@@ -238,4 +238,18 @@ const Provider = sequelize.define("Provider", {
     underscored: false,
 });
 
+Provider.associate = (models) => {
+    Provider.belongsTo(models.Address, {
+        foreignKey: 'correspondence_address_id',
+        as: 'correspondenceaddress'
+    });
+};
+
+Provider.associate = (models) => {
+    Provider.belongsTo(models.Address, {
+        foreignKey: 'permanent_address_id',
+        as: 'permanentaddress'
+    });
+};
+
 export default Provider;
