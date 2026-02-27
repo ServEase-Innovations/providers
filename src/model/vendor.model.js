@@ -1,51 +1,62 @@
-import { sequelize } from "../config/database.js";
+import sequelize from "../config/database.js";
 import { DataTypes } from "sequelize";
 
-const Vendor = sequelize.define("Vendor", {
-    vendorid: {
-        type: DataTypes.BIGINT,
-        primaryKey: true,
-        autoIncrement: true,
-        allowNull: false,
+const Vendor = sequelize.define(
+  "Vendor",
+  {
+    vendorId: {
+      type: DataTypes.BIGINT,
+      primaryKey: true,
+      autoIncrement: true,
+      allowNull: false,
+      field: "vendorid",
     },
     address: {
-        type: DataTypes.STRING,
-        allowNull: false,
+      type: DataTypes.STRING,
+      allowNull: false,
+      field: "address",
     },
-    companyname: {
-        type: DataTypes.STRING,
-        allowNull: false,
+    companyName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      field: "companyname",
     },
-    createddate: {
-        type: DataTypes.DATE,
-        allowNull: true,
-        defaultValue: DataTypes.NOW,
+    createdDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: DataTypes.NOW,
+      field: "createddate",
     },
-    emailid: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
-        validate: {
-            isEmail: true,
-        },
+    emailId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      field: "emailid",
+      validate: {
+        isEmail: true,
+      },
     },
-    isactive: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: true,
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: "isactive",
     },
-    phoneno: {
-        type: DataTypes.BIGINT,
-        allowNull: false,
+    phoneNo: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      field: "phoneno",
     },
-    registrationid: {
-        type: DataTypes.STRING,
-        allowNull: true,
+    registrationId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "registrationid",
     },
-},{
-    timestamps: false,
+  },
+  {
     tableName: "vendor",
-    underscored: false
-});;
+    timestamps: false,
+  }
+);
 
 export default Vendor;
