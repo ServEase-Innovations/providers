@@ -37,7 +37,7 @@
 *                       type: string
 *                       description: Customer ID
 *                       example: "52"
-*                     firstname:
+*                     firstName:
 *                       type: string
 *                       description: Customer name
 *                       example: "Subhrajit"
@@ -45,7 +45,7 @@
 *                       type: string
 *                       description: Customer last name
 *                       example: "Dutta"
-*                     emailid:
+*                     emailId:
 *                       type: string
 *                       description: Customer email
 *                       example: "abs@abc.com"
@@ -110,7 +110,7 @@
 *                             type: string
 *                             description: Customer ID
 *                             example: "52"
-*                           firstname:
+*                           firstName:
 *                             type: string
 *                             description: Customer name
 *                             example: "Subhrajit"
@@ -118,7 +118,7 @@
 *                             type: string
 *                             description: Customer last name
 *                             example: "Dutta"
-*                           emailid:
+*                           emailId:
 *                             type: string
 *                             description: Customer email
 *                             example: "abe@abstract.com"

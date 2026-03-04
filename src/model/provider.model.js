@@ -1,255 +1,177 @@
 import { sequelize } from "../config/database.js";
 import { DataTypes } from "sequelize";
 
-const Provider = sequelize.define("Provider", {
+const Provider = sequelize.define(
+  "Provider",
+  {
     serviceproviderid: {
-        type: DataTypes.BIGINT,
-        primaryKey: true,
-        autoIncrement: true,
-        allowNull: false,
+      type: DataTypes.BIGINT,
+      primaryKey: true,
+      autoIncrement: true,
+      allowNull: false,
     },
+
     dob: {
-        type: DataTypes.DATE,
-        allowNull: true,
+      type: DataTypes.DATE,
+      allowNull: true,
     },
+
     kyc: {
-        type: DataTypes.STRING,
-        allowNull: true,
+      type: DataTypes.STRING,
+      allowNull: true,
     },
+
     age: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
-    alternateno: {
-        type: DataTypes.BIGINT,
-        allowNull: true,
+
+    alternateNo: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      field: "alternateNo",
     },
-    buildingname: {
-        type: DataTypes.STRING,
-        allowNull: false,
+
+    buildingName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      field: "buildingName",
     },
-    cookingspeciality: {
-        type: DataTypes.STRING,
-        allowNull: true,
+
+    cookingSpeciality: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "cookingSpeciality",
     },
-    currentlocation: {
-        type: DataTypes.STRING,
-        allowNull: true,
+
+    currentLocation: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "currentLocation",
     },
+
     diet: {
-        type: DataTypes.STRING,
-        allowNull: true,
+      type: DataTypes.STRING,
+      allowNull: true,
     },
-    emailid: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
-        validate: {
-            isEmail: true,
-        },
+
+    emailId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      validate: { isEmail: true },
+      field: "emailId",
     },
+
     enrolleddate: {
-        type: DataTypes.DATE,
-        allowNull: true,
-        defaultValue: DataTypes.NOW,
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: DataTypes.NOW,
     },
+
     experience: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
-    firstname: {
-        type: DataTypes.STRING,
-        allowNull: false,
+
+    firstName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      field: "firstName",
     },
+
     gender: {
-        type: DataTypes.STRING,
-        allowNull: true,
+      type: DataTypes.STRING,
+      allowNull: true,
     },
-    geohash4: {
-        type: DataTypes.STRING,
-        allowNull: true,
+
+    housekeepingRole: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "housekeepingRole",
     },
-    geohash5: {
-        type: DataTypes.STRING,
-        allowNull: true,
+
+    lastName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      field: "lastName",
     },
-    geohash6: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    geohash7: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    housekeepingrole: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    idno: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    info: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-    },
-    isactive: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: true,
-    },
-    languageknown: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    lastname: {
-        type: DataTypes.STRING,
-        allowNull: false,
-    },
+
     latitude: {
-        type: DataTypes.DECIMAL,
-        allowNull: true,
+      type: DataTypes.DECIMAL,
+      allowNull: true,
     },
+
     locality: {
-        type: DataTypes.STRING,
-        allowNull: false,
+      type: DataTypes.STRING,
+      allowNull: false,
     },
+
     location: {
-        type: DataTypes.STRING,
-        allowNull: true,
+      type: DataTypes.STRING,
+      allowNull: true,
     },
+
     longitude: {
-        type: DataTypes.DECIMAL,
-        allowNull: true,
+      type: DataTypes.DECIMAL,
+      allowNull: true,
     },
-    middlename: {
-        type: DataTypes.STRING,
-        allowNull: true,
+
+    middleName: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "middleName",
     },
-    mobileno: {
-        type: DataTypes.BIGINT,
-        allowNull: false,
+
+    mobileNo: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      field: "mobileNo",
     },
-    nearbylocation: {
-        type: DataTypes.STRING,
-        allowNull: true,
+
+    nearbyLocation: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "nearbyLocation",
     },
+
     pincode: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
-    profilepic: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
+
     rating: {
-        type: DataTypes.DECIMAL,
-        allowNull: false,
-        defaultValue: 0,
-        validate: {
-            min: 0,
-            max: 5,
-        },
+      type: DataTypes.DECIMAL,
+      allowNull: false,
+      defaultValue: 0,
+      validate: { min: 0, max: 5 },
     },
-    speciality: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
+
     street: {
-        type: DataTypes.STRING,
-        allowNull: false,
+      type: DataTypes.STRING,
+      allowNull: false,
     },
-    timeslot: {
-        type: DataTypes.STRING,
-        allowNull: true,
+
+    keyFacts: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      field: "keyFacts",
     },
-    vendorid: {
-        type: DataTypes.BIGINT,
-        allowNull: true,
-    },
-    security_deposit_collected: {
-        type: DataTypes.SMALLINT,
-        allowNull: true,
-        defaultValue: 0,
-    },
-    correspondence_apartment: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    correspondence_city: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    correspondence_country: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    correspondence_pincode: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    correspondence_state: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    correspondence_street: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    permanent_apartment: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    permanent_city: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    permanent_country: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    permanent_pincode: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    permanent_state: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    permanent_street: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    key_facts:  {
-        type: DataTypes.BOOLEAN,
-        allowNull: true,
-    },
+
     correspondence_address_id: {
-        type: DataTypes.BIGINT,
-        allowNull: true,
+      type: DataTypes.BIGINT,
+      allowNull: true,
     },
+
     permanent_address_id: {
-        type: DataTypes.BIGINT,
-        allowNull: true,
+      type: DataTypes.BIGINT,
+      allowNull: true,
     },
-},{    
+  },
+  {
     tableName: "serviceprovider",
     timestamps: false,
-    underscored: false,
-});
-
-Provider.associate = (models) => {
-    Provider.belongsTo(models.Address, {
-        foreignKey: 'correspondence_address_id',
-        as: 'correspondenceaddress'
-    });
-};
-
-Provider.associate = (models) => {
-    Provider.belongsTo(models.Address, {
-        foreignKey: 'permanent_address_id',
-        as: 'permanentaddress'
-    });
-};
+  }
+);
 
 export default Provider;

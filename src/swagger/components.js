@@ -8,7 +8,7 @@
  *         serviceproviderid:
  *           type: integer
  *           example: 3552
- *         firstname:
+ *         firstName:
  *           type: string
  *           example: Saurav
  *         lastname:

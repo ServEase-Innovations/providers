@@ -31,7 +31,7 @@ const Vendor = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
-      field: "emailid",
+      field: "emailId",
       validate: {
         isEmail: true,
       },

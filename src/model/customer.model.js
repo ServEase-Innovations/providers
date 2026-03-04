@@ -24,7 +24,7 @@ const Customer = sequelize.define("Customer", {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    emailid: {
+    emailId: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true,
@@ -37,7 +37,7 @@ const Customer = sequelize.define("Customer", {
         allowNull: true,
         defaultValue: DataTypes.NOW,
     },
-    firstname: {
+    firstName: {
         type: DataTypes.STRING,
         allowNull: false,
     },

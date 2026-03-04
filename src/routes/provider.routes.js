@@ -215,7 +215,7 @@ WHERE
  *                       serviceproviderid:
  *                         type: integer
  *                         example: 3403
- *                       firstname:
+ *                       firstName:
  *                         type: string
  *                         example: Test
  *                       lastname:
@@ -373,7 +373,7 @@ router.get("/nearby", async (req, res) => {
 
     const providers = rows.map(p => ({
       serviceproviderid: p.serviceproviderid,
-      firstname: p.firstname,
+      firstName: p.firstName,
       middlename: p.middlename,
       lastname: p.lastname,
       gender: p.gender,
@@ -383,7 +383,7 @@ router.get("/nearby", async (req, res) => {
       profilepic: p.profilepic,
 
       mobileno: p.mobileno,
-      emailid: p.emailid,
+      emailId: p.emailId,
 
       locality: p.locality,
       location: p.location,
@@ -460,7 +460,15 @@ router.post("/nearby-monthly", async (req, res) => {
       limit = 10
     } = req.body;
 
-    if (!lat || !lng || !role || !startDate || !endDate || !preferredStartTime || !serviceDurationMinutes) {
+    if (
+      !lat ||
+      !lng ||
+      !role ||
+      !startDate ||
+      !endDate ||
+      !preferredStartTime ||
+      !serviceDurationMinutes
+    ) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
@@ -468,45 +476,44 @@ router.post("/nearby-monthly", async (req, res) => {
     const providersRes = await pool.query(
       `
       SELECT
-  serviceproviderid,
-  firstname,
-  lastname,
-  gender,
-  experience,
-  rating,
-  profilepic,
-  mobileno,
-  emailid,
-  diet,
-  cookingspeciality,
-  languageknown,
-  locality,
-  location,
-  pincode,
-  latitude,
-  longitude,
-  timeslot,
-  age,
-  housekeepingrole,
-  (
-    6371 * acos(
-      cos(radians($1)) * cos(radians(latitude)) *
-      cos(radians(longitude) - radians($2)) +
-      sin(radians($1)) * sin(radians(latitude))
-    )
-  ) AS distance_km
-FROM serviceprovider
-WHERE isactive = true
-  AND housekeepingrole = $3
-  AND (
-    6371 * acos(
-      cos(radians($1)) * cos(radians(latitude)) *
-      cos(radians(longitude) - radians($2)) +
-      sin(radians($1)) * sin(radians(latitude))
-    )
-  ) <= $4
-ORDER BY distance_km ASC
-`,
+        "serviceproviderid",
+        "firstName",
+        "lastName",
+        "gender",
+        "experience",
+        "rating",
+        "profilepic",
+        "mobileNo",
+        "emailId",
+        "diet",
+        "cookingSpeciality",
+        "languageknown",
+        "locality",
+        "location",
+        "pincode",
+        "latitude",
+        "longitude",
+        "age",
+        "housekeepingRole",
+        (
+          6371 * acos(
+            cos(radians($1)) * cos(radians("latitude")) *
+            cos(radians("longitude") - radians($2)) +
+            sin(radians($1)) * sin(radians("latitude"))
+          )
+        ) AS distance_km
+      FROM "serviceprovider"
+      WHERE "isactive" = true
+        AND "housekeepingRole" = $3
+        AND (
+          6371 * acos(
+            cos(radians($1)) * cos(radians("latitude")) *
+            cos(radians("longitude") - radians($2)) +
+            sin(radians($1)) * sin(radians("latitude"))
+          )
+        ) <= $4
+      ORDER BY distance_km ASC
+      `,
       [lat, lng, role, radius]
     );
 
@@ -516,7 +523,23 @@ ORDER BY distance_km ASC
 
     const providerIds = providersRes.rows.map(p => p.serviceproviderid);
 
-    /* ---------- STEP 2: Fetch bookings (epoch only) ---------- */
+    /* ---------- STEP 2: Fetch Weekly Slots ---------- */
+    const weeklySlotsRes = await pool.query(
+      `
+      SELECT serviceproviderid, day_of_week, slot_start, slot_end
+      FROM provider_weekly_slots
+      WHERE serviceproviderid = ANY($1)
+      `,
+      [providerIds]
+    );
+
+    const weeklySlotsByProvider = {};
+    for (const row of weeklySlotsRes.rows) {
+      weeklySlotsByProvider[row.serviceproviderid] ??= [];
+      weeklySlotsByProvider[row.serviceproviderid].push(row);
+    }
+
+    /* ---------- STEP 3: Fetch Bookings ---------- */
     const rangeStartEpoch = getDayWindowEpoch(startDate).start;
     const rangeEndEpoch = getDayWindowEpoch(endDate).end;
 
@@ -525,11 +548,8 @@ ORDER BY distance_km ASC
       SELECT
         pa.serviceproviderid,
         pa.slot_start_epoch,
-        pa.slot_end_epoch,
-        COALESCE(e.booking_type, 'MONTHLY') AS booking_type
+        pa.slot_end_epoch
       FROM provider_availability pa
-      LEFT JOIN engagements e
-        ON e.engagement_id = pa.engagement_id
       WHERE
         pa.serviceproviderid = ANY($1)
         AND pa.slot_start_epoch BETWEEN $2 AND $3
@@ -543,14 +563,12 @@ ORDER BY distance_km ASC
       bookingsByProvider[b.serviceproviderid].push(b);
     }
 
-    /* ---------- STEP 3: Monthly Evaluation ---------- */
+    /* ---------- STEP 4: Monthly Evaluation ---------- */
     const durationSec = serviceDurationMinutes * 60;
     const evaluatedProviders = [];
 
     for (const p of providersRes.rows) {
-      const [workStart, workEnd] = p.timeslot.split("-");
-      const [startH] = workStart.split(":").map(Number);
-      const [endH] = workEnd.split(":").map(Number);
+      const providerWeeklySlots = weeklySlotsByProvider[p.serviceproviderid] || [];
 
       let totalDays = 0;
       let daysAtPreferredTime = 0;
@@ -564,114 +582,136 @@ ORDER BY distance_km ASC
         d.setDate(d.getDate() + 1)
       ) {
         totalDays++;
-        const dateStr = d.toISOString().slice(0, 10);
-        const { start: dayStart, end: dayEnd } = getDayWindowEpoch(dateStr);
 
-        const providerBookings = bookingsByProvider[p.serviceproviderid] || [];
-        const dayBookings = providerBookings.filter(b =>
-          overlaps(b.slot_start_epoch, b.slot_end_epoch, dayStart, dayEnd)
+        const dateStr = d.toISOString().slice(0, 10);
+        const dow = d.getDay();
+
+        const todaysSlots = providerWeeklySlots.filter(
+          s => s.day_of_week === dow
         );
 
-        // const hasOnDemand = dayBookings.some(b => b.booking_type === "ON_DEMAND" ) ;
-        // 1️⃣ Check preferred time overlap
-const preferredEpoch = epochInIST(dateStr, preferredStartTime);
+        if (!todaysSlots.length) {
+          unavailableDays++;
+          exceptions.push({
+            date: dateStr,
+            reason: "NO_WEEKLY_SLOT_DEFINED",
+            suggestedTime: null
+          });
+          continue;
+        }
 
-const preferredBlocked = dayBookings.some(b =>
-  overlaps(
-    preferredEpoch,
-    preferredEpoch + durationSec,
-    b.slot_start_epoch,
-    b.slot_end_epoch
-  )
-);
+        const providerBookings =
+          bookingsByProvider[p.serviceproviderid] || [];
 
-// 2️⃣ If preferred time works → success
-if (!preferredBlocked) {
-  daysAtPreferredTime++;
-  continue;
-}
+        const preferredEpoch = epochInIST(dateStr, preferredStartTime);
 
+        /* ---------- 1️⃣ Check Working Hours ---------- */
+        const isInsideWorkingSlot = todaysSlots.some(slot => {
+          const slotStartEpoch = epochInIST(dateStr, slot.slot_start);
+          const slotEndEpoch = epochInIST(dateStr, slot.slot_end);
 
+          return (
+            preferredEpoch >= slotStartEpoch &&
+            preferredEpoch + durationSec <= slotEndEpoch
+          );
+        });
 
+        if (!isInsideWorkingSlot) {
+          daysWithDifferentTime++;
+          exceptions.push({
+            date: dateStr,
+            reason: "OUTSIDE_WORKING_HOURS",
+            suggestedTime: todaysSlots[0].slot_start
+          });
+          continue;
+        }
 
-        // if (!hasOnDemand) {
-        //   daysAtPreferredTime++;
-        //   continue;
-        // }
+        /* ---------- 2️⃣ Check Booking Conflict ---------- */
+        const preferredBlocked = providerBookings.some(b =>
+          overlaps(
+            preferredEpoch,
+            preferredEpoch + durationSec,
+            b.slot_start_epoch,
+            b.slot_end_epoch
+          )
+        );
 
-        // let alternate = null;
-        // for (let h = startH; h < endH; h++) {
-        //   const epoch = epochInIST(dateStr, String(h).padStart(2, "0"));
-        //   const blocked = dayBookings.some(b =>
-        //     overlaps(epoch, epoch + durationSec, b.slot_start_epoch, b.slot_end_epoch)
-        //   );
-        //   if (!blocked) {
-        //     alternate = `${String(h).padStart(2, "0")}:00`;
-        //     break;
-        //   }
-        // }
+        if (!preferredBlocked) {
+          daysAtPreferredTime++;
+          continue;
+        }
 
+        /* ---------- 3️⃣ Find Alternate Slot ---------- */
         let alternate = null;
 
-for (let h = startH; h < endH; h++) {
-  const epoch = epochInIST(dateStr, String(h).padStart(2, "0"));
+        for (const slot of todaysSlots) {
+          const startHour = parseInt(slot.slot_start.split(":")[0]);
+          const endHour = parseInt(slot.slot_end.split(":")[0]);
 
-  const blocked = dayBookings.some(b =>
-    overlaps(
-      epoch,
-      epoch + durationSec,
-      b.slot_start_epoch,
-      b.slot_end_epoch
-    )
-  );
+          for (let h = startHour; h < endHour; h++) {
+            const epoch = epochInIST(
+              dateStr,
+              String(h).padStart(2, "0") + ":00"
+            );
 
-  if (!blocked) {
-    alternate = `${String(h).padStart(2, "0")}:00`;
-    break;
-  }
-}
+            const blocked = providerBookings.some(b =>
+              overlaps(
+                epoch,
+                epoch + durationSec,
+                b.slot_start_epoch,
+                b.slot_end_epoch
+              )
+            );
 
+            if (!blocked) {
+              alternate = `${String(h).padStart(2, "0")}:00`;
+              break;
+            }
+          }
+
+          if (alternate) break;
+        }
 
         if (alternate) {
-  daysWithDifferentTime++;
-  exceptions.push({
-    date: dateStr,
-    reason: "BOOKED", // not ON_DEMAND
-    suggestedTime: alternate
-  });
-} else {
-  unavailableDays++;
-  exceptions.push({
-    date: dateStr,
-    reason: "FULLY_BOOKED",
-    suggestedTime: null
-  });
-}
-
+          daysWithDifferentTime++;
+          exceptions.push({
+            date: dateStr,
+            reason: "BOOKED",
+            suggestedTime: alternate
+          });
+        } else {
+          unavailableDays++;
+          exceptions.push({
+            date: dateStr,
+            reason: "FULLY_BOOKED",
+            suggestedTime: null
+          });
+        }
       }
 
       evaluatedProviders.push({
         serviceproviderid: p.serviceproviderid,
-        firstname: p.firstname,
-        lastname: p.lastname,
+        firstName: p.firstName,
+        lastName: p.lastName,
         gender: p.gender,
-  experience: p.experience,
-  rating: p.rating,
-  diet: p.diet,
-  cookingspeciality: p.cookingspeciality,
-  languageknown: p.languageknown,
-    locality: p.locality,
-  location: p.location,
-  pincode: p.pincode,
-  latitude: p.latitude,
-  longitude: p.longitude,
-  age : p.age,
-  housekeepingrole: p.housekeepingrole,
+        experience: p.experience,
+        rating: p.rating,
+        diet: p.diet,
+        cookingSpeciality: p.cookingSpeciality,
+        languageknown: p.languageknown,
+        locality: p.locality,
+        location: p.location,
+        pincode: p.pincode,
+        latitude: p.latitude,
+        longitude: p.longitude,
+        age: p.age,
+        housekeepingRole: p.housekeepingRole,
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
         monthlyAvailability: {
           preferredTime: preferredStartTime,
-          fullyAvailable: unavailableDays === 0 && daysWithDifferentTime === 0,
+          fullyAvailable:
+            unavailableDays === 0 && daysWithDifferentTime === 0,
           summary: {
             totalDays,
             daysAtPreferredTime,
@@ -683,24 +723,24 @@ for (let h = startH; h < endH; h++) {
       });
     }
 
-    /* ---------- STEP 4: Grouping ---------- */
+    /* ---------- STEP 5: Group & Rank ---------- */
     const available = evaluatedProviders.filter(
       p => p.monthlyAvailability.fullyAvailable
     );
+
     const notAvailable = evaluatedProviders.filter(
       p => !p.monthlyAvailability.fullyAvailable
     );
 
-    /* ---------- STEP 5: Best Match ---------- */
     available.sort((a, b) => a.distance_km - b.distance_km);
+
     if (available.length > 0) {
       available[0].bestMatch = true;
     }
 
-    /* ---------- STEP 6: Final ordering ---------- */
     const ordered = [...available, ...notAvailable];
 
-    /* ---------- STEP 7: Pagination ---------- */
+    /* ---------- STEP 6: Pagination ---------- */
     const startIndex = (page - 1) * limit;
     const paginated = ordered.slice(startIndex, startIndex + limit);
 
@@ -725,13 +765,15 @@ router.post("/check-email", async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT EXISTS (
-        SELECT 1 FROM customer WHERE emailId = $1
-        UNION ALL
-        SELECT 1 FROM serviceprovider WHERE emailId = $1
-      ) As exists;`,
-      [email]
-    );
+  `
+  SELECT
+    EXISTS (SELECT 1 FROM customer WHERE "emailid" = $1)
+    OR
+    EXISTS (SELECT 1 FROM serviceprovider WHERE "emailId" = $1)
+    AS exists;
+  `,
+  [email]
+);
 
     res.json({
       exists : result.rows[0].exists,
@@ -751,10 +793,10 @@ router.post("/check-mobile", async (req, res) => {
 
     const result = await pool.query(
       `SELECT EXISTS (
-        SELECT 1 FROM customer WHERE mobileno = $1
+        SELECT 1 FROM customer WHERE "mobileno" = $1
         UNION ALL
-        SELECT 1 FROM serviceprovider WHERE mobileno = $1
-      ) As exists;`,
+        SELECT 1 FROM serviceprovider WHERE "mobileNo" = $1
+      ) AS exists;`,
       [mobile]
     );
 

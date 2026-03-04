@@ -2,7 +2,7 @@ import Customer from "../model/customer.model.js";
 
 export const getCustomerByIdService = async (customerId) => {
     return await Customer.findByPk(customerId, {
-        attributes: ['customerid', 'firstname','lastname','emailid','mobileno','alternateno']
+        attributes: ['customerid', 'firstName','lastname','emailId','mobileno','alternateno']
     })
 };
 
