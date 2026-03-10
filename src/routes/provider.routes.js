@@ -1,6 +1,12 @@
 import { Router } from "express";
 import pg from "pg";
 import { addProvider, getPaginatedProviders } from "../controllers/provider.controller.js";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const router = Router();
 const { Pool } = pg;
@@ -18,9 +24,7 @@ const pool = new Pool({
 
 // Convert date + time → epoch seconds
 function toEpoch(date, time) {
-  return Math.floor(
-    new Date(`${date}T${time}:00`).getTime() / 1000
-  );
+  return epochInIST(date, time);
 }
 
 // Generate hourly availability for a date
@@ -39,10 +43,7 @@ function generateHourlyAvailability(timeslot, bookedSlots, date) {
   const available = [];
 
   for (let hour = startH; hour < endH; hour++) {
-    const epoch = Math.floor(
-      new Date(`${date}T${String(hour).padStart(2, "0")}:00:00`).getTime() / 1000
-    );
-
+    const epoch = epochInIST(dateStr, `${String(h).padStart(2,"0")}:00`);
     const blocked = bookedSlots.some(
       b => epoch < b.end && epoch + 3600 > b.start
     );
@@ -425,16 +426,16 @@ router.get("/nearby", async (req, res) => {
 
 const TZ_OFFSET = "+05:30";
 
-function epochInIST(dateStr, timeStr = "00:00:00") {
-  return Math.floor(
-    new Date(`${dateStr}T${timeStr}${TZ_OFFSET}`).getTime() / 1000
-  );
+function epochInIST(dateStr, timeStr) {
+  return dayjs
+    .tz(`${dateStr} ${timeStr}`, "YYYY-MM-DD HH:mm", "Asia/Kolkata")
+    .unix();
 }
 
 function getDayWindowEpoch(dateStr) {
   return {
-    start: epochInIST(dateStr, "00:00:00"),
-    end: epochInIST(dateStr, "23:59:59")
+    start: epochInIST(dateStr, "00:00"),
+    end: epochInIST(dateStr, "23:59")
   };
 }
 
@@ -540,27 +541,76 @@ router.post("/nearby-monthly", async (req, res) => {
     }
 
     /* ---------- STEP 3: Fetch Bookings ---------- */
-    const rangeStartEpoch = getDayWindowEpoch(startDate).start;
-    const rangeEndEpoch = getDayWindowEpoch(endDate).end;
-
     const bookingsRes = await pool.query(
       `
       SELECT
         pa.serviceproviderid,
+        pa.date,
         pa.slot_start_epoch,
         pa.slot_end_epoch
       FROM provider_availability pa
       WHERE
         pa.serviceproviderid = ANY($1)
-        AND pa.slot_start_epoch BETWEEN $2 AND $3
+        AND pa.status = 'BOOKED'
+        AND pa.date BETWEEN $2::date AND $3::date
+        AND pa.slot_start_epoch IS NOT NULL
+        AND pa.slot_end_epoch IS NOT NULL
       `,
-      [providerIds, rangeStartEpoch, rangeEndEpoch]
+      [providerIds, startDate, endDate]
+    );
+
+    /* ---------- Fallback: Engagements (in case provider_availability not populated) ---------- */
+    const engagementsRes = await pool.query(
+      `
+      SELECT
+        e.serviceproviderid,
+        e.start_date,
+        e.end_date,
+        e.start_epoch,
+        e.end_epoch,
+        e.duration_minutes
+      FROM engagements e
+      WHERE
+        e.serviceproviderid = ANY($1)
+        AND e.active = true
+        AND e.start_date <= $3::date
+        AND e.end_date >= $2::date
+        AND e.booking_type IN ('MONTHLY', 'SHORT_TERM')
+        AND (e.engagement_status = 'ASSIGNED' OR e.assignment_status = 'ASSIGNED')
+      `,
+      [providerIds, startDate, endDate]
     );
 
     const bookingsByProvider = {};
     for (const b of bookingsRes.rows) {
       bookingsByProvider[b.serviceproviderid] ??= [];
-      bookingsByProvider[b.serviceproviderid].push(b);
+      bookingsByProvider[b.serviceproviderid].push({
+        slot_start_epoch: Number(b.slot_start_epoch),
+        slot_end_epoch: Number(b.slot_end_epoch)
+      });
+    }
+
+    for (const e of engagementsRes.rows) {
+      const timeStr = dayjs.unix(Number(e.start_epoch)).tz("Asia/Kolkata").format("HH:mm");
+      const durationSec = (e.duration_minutes || 60) * 60;
+      const engStart = new Date(e.start_date);
+      const engEnd = new Date(e.end_date);
+      const rangeStart = new Date(startDate);
+      const rangeEnd = new Date(endDate);
+      const fromDate = engStart > rangeStart ? engStart : rangeStart;
+      const toDate = engEnd < rangeEnd ? engEnd : rangeEnd;
+
+      for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().slice(0, 10);
+        const slotStart = epochInIST(dateStr, timeStr);
+        const slotEnd = slotStart + durationSec;
+
+        bookingsByProvider[e.serviceproviderid] ??= [];
+        bookingsByProvider[e.serviceproviderid].push({
+          slot_start_epoch: slotStart,
+          slot_end_epoch: slotEnd
+        });
+      }
     }
 
     /* ---------- STEP 4: Monthly Evaluation ---------- */
@@ -605,6 +655,8 @@ router.post("/nearby-monthly", async (req, res) => {
 
         const preferredEpoch = epochInIST(dateStr, preferredStartTime);
 
+        console.log(`Evaluating Provider ${p.serviceproviderid} on ${dateStr} with preferred time ${preferredStartTime}`);
+
         /* ---------- 1️⃣ Check Working Hours ---------- */
         const isInsideWorkingSlot = todaysSlots.some(slot => {
           const slotStartEpoch = epochInIST(dateStr, slot.slot_start);
@@ -634,6 +686,12 @@ router.post("/nearby-monthly", async (req, res) => {
             b.slot_start_epoch,
             b.slot_end_epoch
           )
+        );
+
+
+        console.log(`Provider ${p.serviceproviderid} on ${dateStr}: Preferred slot ${
+          preferredBlocked ? "BLOCKED" : "AVAILABLE"
+        }`
         );
 
         if (!preferredBlocked) {
