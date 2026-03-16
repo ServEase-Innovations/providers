@@ -1,4 +1,4 @@
-import { getCustomerByIdService, getPaginatedCustomersService, getAllCustomersService } from "../services/customer.service.js";
+import { getCustomerByIdService, getPaginatedCustomersService, getAllCustomersService,createCustomerService,updateCustomerService } from "../services/customer.service.js";
 import { getPagination, getPagingData } from "../utils/pagination.util.js";
 import responseHandling from "../utils/response.util.js";
 
@@ -29,4 +29,43 @@ export const getPaginatedCustomers = async (req, res, next) => {
     } catch (error) {
         next(error);
     }
+};
+
+export const createCustomer = async (req, res, next) => {
+    try {
+        const customerData = req.body;
+
+        const customer = await createCustomerService(customerData);
+
+        return responseHandling(
+            res,
+            201,
+            "Customer created successfully",
+            customer
+        );
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const updateCustomer = async (req, res, next) => {
+  try {
+    const customerId = req.params.id;
+    const customerData = req.body;
+
+    const updatedCustomer = await updateCustomerService(customerId, customerData);
+
+    if (!updatedCustomer) {
+      return responseHandling(res, 404, "Customer not found");
+    }
+
+    return responseHandling(
+      res,
+      200,
+      "Customer updated successfully",
+      updatedCustomer
+    );
+  } catch (error) {
+    next(error);
+  }
 };

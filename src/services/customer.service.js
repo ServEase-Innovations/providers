@@ -17,3 +17,19 @@ export const getPaginatedCustomersService = async (limit, offset) => {
 export const getAllCustomersService = async () => {
     return await Customer.findAll();
 }
+
+export const createCustomerService = async (data) => {
+    return await Customer.create(data);
+};
+
+export const updateCustomerService = async (customerId, data) => {
+  const customer = await Customer.findByPk(customerId);
+
+  if (!customer) {
+    return null;
+  }
+
+  await customer.update(data);
+
+  return customer;
+};
