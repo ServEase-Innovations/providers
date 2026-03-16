@@ -55,6 +55,23 @@ const Provider = sequelize.define(
       allowNull: true,
     },
 
+    // Raw timeslot string, e.g. "06:00-20:00" (or "06:00-20:00,10:00-14:00")
+    // used in Swagger schemas and nearby search responses.
+    timeslot: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "timeslot",
+    },
+
+    // NOTE: DB column is "languageknown" (all lowercase),
+    // swagger/request uses "languageKnown" (camelCase).
+    // Sequelize will map this attribute to that column.
+    languageKnown: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "languageknown",
+    },
+
     emailId: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -145,6 +162,14 @@ const Provider = sequelize.define(
       allowNull: false,
       defaultValue: 0,
       validate: { min: 0, max: 5 },
+    },
+
+    // Active flag used in raw SQL queries ("isactive" column)
+    isactive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: "isactive",
     },
 
     street: {

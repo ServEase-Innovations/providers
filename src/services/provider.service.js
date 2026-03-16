@@ -23,7 +23,6 @@ export const addProviderService = async (providerData) => {
       permanentAddress,
       correspondenceAddress,
       weeklySlots,
-      timeslot,
       ...serviceproviderdata
     } = providerData;
 
@@ -42,6 +41,8 @@ export const addProviderService = async (providerData) => {
     const provider = await Provider.create(
       {
         ...serviceproviderdata,
+        // Persist raw timeslot string on provider row as well
+        timeslot: providerData.timeslot,
         permanent_address_id: permanent.id,
         correspondence_address_id: correspondence.id
       },
