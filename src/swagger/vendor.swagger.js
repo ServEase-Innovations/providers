@@ -98,3 +98,128 @@
  *       500:
  *         description: Internal server error
  */
+
+/**
+ * @swagger
+ * /api/vendors:
+ *   get:
+ *     summary: Get all vendors
+ *     description: Retrieve a list of all vendors.
+ *     tags:
+ *       - Vendor
+ *     responses:
+ *       200:
+ *         description: List of vendors fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: "Vendors fetched successfully"
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       vendorId:
+ *                         type: integer
+ *                         format: int64
+ *                         description: Auto-generated vendor ID
+ *                         example: 1
+ *                       companyName:
+ *                         type: string
+ *                         example: "ABC Pvt Ltd"
+ *                       address:
+ *                         type: string
+ *                         example: "123 Main St, City, Country"
+ *                       createdDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2024-06-01T12:00:00Z"
+ *                       emailId:
+ *                         type: string
+ *                         format: email
+ *                         example: "abc@abc.com"
+ *                       isActive:
+ *                         type: boolean
+ *                         example: true
+ *                       phoneNo:
+ *                         type: string
+ *                         example: "1234567890"
+ *                       registrationId:
+ *                         type: string
+ *                         example: "REG12345"
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/vendor/{id}:
+ *   get:
+ *     summary: Get vendor by ID
+ *     description: Retrieve a single vendor by its ID.
+ *     tags:
+ *       - Vendor
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID of the vendor
+ *     responses:
+ *       200:
+ *         description: Vendor fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: "Vendor fetched successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     vendorId:
+ *                       type: integer
+ *                       format: int64
+ *                       description: Auto-generated vendor ID
+ *                       example: 1
+ *                     companyName:
+ *                       type: string
+ *                       example: "ABC Pvt Ltd"
+ *                     address:
+ *                       type: string
+ *                       example: "123 Main St, City, Country"
+ *                     createdDate:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2024-06-01T12:00:00Z"
+ *                     emailId:
+ *                       type: string
+ *                       format: email
+ *                       example: "abc@abc.com"
+ *                     isActive:
+ *                       type: boolean
+ *                       example: true
+ *                     phoneNo:
+ *                       type: string
+ *                       example: "1234567890"
+ *                     registrationId:
+ *                       type: string
+ *                       example: "REG12345"
+ *       404:
+ *         description: Vendor not found
+ *       500:
+ *         description: Internal server error
+ */
