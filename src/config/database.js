@@ -6,11 +6,11 @@ dotenv.config();
 const isProduction = process.env.NODE_ENV === "production";
 
 export const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
+  "serveaso",
+  "serveaso",
+  "serveaso",
   {
-    host: process.env.DB_HOST,
+    host: "13.126.11.184",
     port: Number(process.env.DB_PORT) || 5432,
     dialect: "postgres",
 
