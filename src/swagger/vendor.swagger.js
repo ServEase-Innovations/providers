@@ -218,6 +218,31 @@
  *                     registrationId:
  *                       type: string
  *                       example: "REG12345"
+ *                     providers:
+ *                       type: array
+ *                       description: Providers mapped to this vendor (by vendorId)
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           serviceproviderid:
+ *                             type: integer
+ *                             format: int64
+ *                             example: 3552
+ *                           firstName:
+ *                             type: string
+ *                             example: "Ronit"
+ *                           lastName:
+ *                             type: string
+ *                             example: "Maity"
+ *                           mobileNo:
+ *                             type: integer
+ *                             example: 9876543210
+ *                           emailId:
+ *                             type: string
+ *                             example: "ronit@gmail.com"
+ *                           vendorId:
+ *                             type: integer
+ *                             example: 1
  *       404:
  *         description: Vendor not found
  *       500:

@@ -15,6 +15,17 @@ export const getAllProvidersService = async () => {
     return await Provider.findAll();
 }
 
+export const getProvidersByVendorIdService = async (vendorId) => {
+  return await Provider.findAll({
+    where: { vendorId },
+    order: [["serviceproviderid", "DESC"]],
+  });
+};
+
+export const getProviderByIdService = async (serviceproviderid) => {
+  return await Provider.findByPk(serviceproviderid);
+};
+
 export const addProviderService = async (providerData) => {
   const transaction = await sequelize.transaction();
 
@@ -23,6 +34,7 @@ export const addProviderService = async (providerData) => {
       permanentAddress,
       correspondenceAddress,
       weeklySlots,
+      timeslot,
       ...serviceproviderdata
     } = providerData;
 

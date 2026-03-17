@@ -3,6 +3,7 @@ import {
   getAllVendorsService,
   getVendorByIdService,
 } from "../services/vendor.service.js";
+import { getProvidersByVendorIdService } from "../services/provider.service.js";
 import responseHandling from "../utils/response.util.js";
 
 export const addVendor = async (req, res, next) => {
@@ -33,7 +34,12 @@ export const getVendorById = async (req, res, next) => {
       return responseHandling(res, 404, "Vendor not found");
     }
 
-    return responseHandling(res, 200, "Vendor fetched successfully", vendor);
+    const providers = await getProvidersByVendorIdService(vendor.vendorId);
+
+    return responseHandling(res, 200, "Vendor fetched successfully", {
+      ...vendor.toJSON(),
+      providers,
+    });
   } catch (error) {
     next(error);
   }

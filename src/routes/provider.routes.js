@@ -1,6 +1,10 @@
 import { Router } from "express";
 import pg from "pg";
-import { addProvider, getPaginatedProviders } from "../controllers/provider.controller.js";
+import {
+  addProvider,
+  getPaginatedProviders,
+  getProviderById,
+} from "../controllers/provider.controller.js";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
@@ -868,5 +872,6 @@ router.post("/check-mobile", async (req, res) => {
 });
 
 router.get('/providers',getPaginatedProviders);
+router.get("/serviceprovider/:id", getProviderById);
 router.post('/serviceprovider/add', addProvider)
 export default router;
