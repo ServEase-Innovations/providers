@@ -202,3 +202,55 @@
  *       500:
  *         description: Internal server error
  */
+
+/**
+ * @swagger
+ * /api/service-providers/providers:
+ *   get:
+ *     summary: Get all service providers
+ *     description: Retrieve all service providers. If `page` and `size` query params are provided, results are paginated.
+ *     tags:
+ *       - Service Providers
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           example: 1
+ *       - in: query
+ *         name: size
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           example: 10
+ *     responses:
+ *       200:
+ *         description: Service providers retrieved successfully
+ *       500:
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /api/service-providers/serviceprovider/{id}:
+ *   get:
+ *     summary: Get service provider by ID
+ *     description: Retrieve a single service provider by its `serviceproviderid`.
+ *     tags:
+ *       - Service Providers
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           example: 3552
+ *     responses:
+ *       200:
+ *         description: Service provider retrieved successfully
+ *       404:
+ *         description: Provider not found
+ *       500:
+ *         description: Internal server error
+ */
