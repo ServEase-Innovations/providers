@@ -2,7 +2,8 @@ import {
   getPaginatedProvidersService,
   getAllProvidersService,
   addProviderService,
-  getProviderByIdService,
+    getProviderByIdService,
+    updateProviderService
 } from "../services/provider.service.js";
 import { getPagination, getPagingData } from "../utils/pagination.util.js";
 import responseHandling from "../utils/response.util.js";
@@ -83,6 +84,28 @@ export const getProviderById = async (req, res, next) => {
 
     const hydrated = await attachAddresses(provider);
     return responseHandling(res, 200, "Provider retrieved successfully", hydrated);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateProvider = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const providerData = req.body;
+
+    const updatedProvider = await updateProviderService(id, providerData);
+
+    if (!updatedProvider) {
+      return responseHandling(res, 404, "Provider not found");
+    }
+
+    return responseHandling(
+      res,
+      200,
+      "Provider updated successfully",
+      updatedProvider
+    );
   } catch (error) {
     next(error);
   }

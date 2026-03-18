@@ -147,3 +147,13 @@ const convertTimeslotString = (timeslot) => {
 
   return weeklySlots;
 };
+export const updateProviderService = async (serviceproviderid, providerData) => {
+  const provider = await Provider.findByPk(serviceproviderid);
+
+  if (!provider) {
+    return null;
+  }
+
+  await provider.update(providerData);
+  return provider;
+};
