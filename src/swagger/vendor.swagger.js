@@ -248,3 +248,107 @@
  *       500:
  *         description: Internal server error
  */
+/**
+ * @swagger
+ * /api/vendor/{id}:
+ *   put:
+ *     summary: Update vendor by ID
+ *     description: Update an existing vendor using its ID.
+ *     tags:
+ *       - Vendor
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID of the vendor
+ *         example: 1
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               companyName:
+ *                 type: string
+ *                 description: Name of the vendor company
+ *                 example: "ABC Pvt Ltd Updated"
+ *               address:
+ *                 type: string
+ *                 description: Address of the vendor
+ *                 example: "456 New Street, Bengaluru, India"
+ *               createdDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Date when the vendor was created
+ *                 example: "2024-06-01T12:00:00Z"
+ *               emailid:
+ *                 type: string
+ *                 format: email
+ *                 description: Email address of the vendor
+ *                 example: "updated@abc.com"
+ *               isActive:
+ *                 type: boolean
+ *                 description: Indicates if the vendor is active
+ *                 example: true
+ *               phoneNo:
+ *                 type: string
+ *                 description: Phone number of the vendor
+ *                 example: "9876543210"
+ *               registrationId:
+ *                 type: string
+ *                 description: Registration ID of the vendor
+ *                 example: "REG98765"
+ *     responses:
+ *       200:
+ *         description: Vendor updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: "Vendor updated successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     vendorId:
+ *                       type: integer
+ *                       format: int64
+ *                       example: 1
+ *                     companyName:
+ *                       type: string
+ *                       example: "ABC Pvt Ltd Updated"
+ *                     address:
+ *                       type: string
+ *                       example: "456 New Street, Bengaluru, India"
+ *                     createdDate:
+ *                       type: string
+ *                       format: date-time
+ *                       example: "2024-06-01T12:00:00Z"
+ *                     emailid:
+ *                       type: string
+ *                       format: email
+ *                       example: "updated@abc.com"
+ *                     isActive:
+ *                       type: boolean
+ *                       example: true
+ *                     phoneNo:
+ *                       type: string
+ *                       example: "9876543210"
+ *                     registrationId:
+ *                       type: string
+ *                       example: "REG98765"
+ *       404:
+ *         description: Vendor not found
+ *       400:
+ *         description: Bad request - Invalid input data
+ *       500:
+ *         description: Internal server error
+ */

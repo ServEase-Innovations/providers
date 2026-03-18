@@ -2,6 +2,7 @@ import {
   addVendorService,
   getAllVendorsService,
   getVendorByIdService,
+  updateVendorService,
 } from "../services/vendor.service.js";
 import { getProvidersByVendorIdService } from "../services/provider.service.js";
 import responseHandling from "../utils/response.util.js";
@@ -40,6 +41,22 @@ export const getVendorById = async (req, res, next) => {
       ...vendor.toJSON(),
       providers,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+export const updateVendor = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const vendorData = req.body;
+
+    const vendor = await updateVendorService(id, vendorData);
+
+    if (!vendor) {
+      return responseHandling(res, 404, "Vendor not found");
+    }
+
+    return responseHandling(res, 200, "Vendor updated successfully", vendor);
   } catch (error) {
     next(error);
   }
