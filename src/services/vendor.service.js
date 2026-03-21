@@ -29,3 +29,14 @@ export const getVendorByIdService = async (vendorId) => {
 
   return vendor;
 };
+
+export const updateVendorService = async (vendorId, vendorData) => {
+  const vendor = await Vendor.findByPk(vendorId);
+
+  if (!vendor) {
+    return null;
+  }
+
+  await vendor.update(vendorData);
+  return vendor;
+}
