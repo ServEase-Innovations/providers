@@ -73,10 +73,10 @@ const Provider = sequelize.define(
     // swagger/request uses "languageKnown" (camelCase).
     // Sequelize will map this attribute to that column.
     languageKnown: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      field: "languageknown",
-    },
+  type: DataTypes.STRING,
+  field: "languageknown", // ✅ maps DB column
+  allowNull: true
+},
 
     emailId: {
       type: DataTypes.STRING,

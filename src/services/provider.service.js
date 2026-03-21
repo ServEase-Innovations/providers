@@ -57,13 +57,16 @@ export const addProviderService = async (providerData) => {
         timeslot: providerData.timeslot,
         permanent_address_id: permanent.id,
         correspondence_address_id: correspondence.id,
+        languageKnown: Array.isArray(providerData.languages)
+  ? providerData.languages.join(",")
+  : providerData.languages,
         vendorId: providerData.agentReferralId
       ? Number(providerData.agentReferralId)
       : null
       },
       { transaction }
     );
-    
+
 
     // 3️⃣ Convert timeslot AFTER provider exists
     let finalWeeklySlots = [];
