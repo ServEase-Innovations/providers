@@ -254,3 +254,128 @@
  *       500:
  *         description: Internal server error
  */
+/**
+ * @swagger
+ * /api/service-providers/serviceprovider/{id}:
+ *   put:
+ *     summary: Update service provider by ID
+ *     description: Update an existing service provider using its `serviceproviderid`.
+ *     tags:
+ *       - Service Providers
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           example: 3552
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *
+ *               firstName:
+ *                 type: string
+ *                 example: "Ronit"
+ *
+ *               middleName:
+ *                 type: string
+ *                 example: "Kumar"
+ *
+ *               lastName:
+ *                 type: string
+ *                 example: "Maity"
+ *
+ *               mobileNo:
+ *                 type: integer
+ *                 example: 9876543210
+ *
+ *               alternateNo:
+ *                 type: integer
+ *                 example: 9999999999
+ *
+ *               emailId:
+ *                 type: string
+ *                 format: email
+ *                 example: "ronit@gmail.com"
+ *
+ *               gender:
+ *                 type: string
+ *                 example: "MALE"
+ *
+ *               dob:
+ *                 type: string
+ *                 format: date
+ *                 example: "1992-02-14"
+ *
+ *               experience:
+ *                 type: integer
+ *                 example: 10
+ *
+ *               housekeepingRole:
+ *                 type: string
+ *                 example: "COOK"
+ *
+ *               diet:
+ *                 type: string
+ *                 example: "BOTH"
+ *
+ *               cookingSpeciality:
+ *                 type: string
+ *                 example: "South Indian"
+ *
+ *               languageKnown:
+ *                 type: string
+ *                 example: "Hindi, English"
+ *
+ *               isactive:
+ *                 type: boolean
+ *                 example: true
+ *
+ *               vendorId:
+ *                 type: integer
+ *                 example: 2
+ *
+ *               buildingName:
+ *                 type: string
+ *                 example: "Sunshine Apartments"
+ *
+ *               street:
+ *                 type: string
+ *                 example: "Kanakanagar"
+ *
+ *               locality:
+ *                 type: string
+ *                 example: "Bengaluru"
+ *
+ *               pincode:
+ *                 type: integer
+ *                 example: 560111
+ *
+ *               latitude:
+ *                 type: number
+ *                 format: float
+ *                 example: 12.90319
+ *
+ *               longitude:
+ *                 type: number
+ *                 format: float
+ *                 example: 77.57116
+ *
+ *               timeslot:
+ *                 type: string
+ *                 example: "06:00-20:00"
+ *
+ *     responses:
+ *       200:
+ *         description: Service provider updated successfully
+ *       404:
+ *         description: Provider not found
+ *       400:
+ *         description: Invalid request payload
+ *       500:
+ *         description: Internal server error
+ */

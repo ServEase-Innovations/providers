@@ -10,6 +10,11 @@ const Provider = sequelize.define(
       autoIncrement: true,
       allowNull: false,
     },
+    vendorId: {
+  type: DataTypes.BIGINT,
+  allowNull: false,
+  field: "vendorid",
+},
 
     dob: {
       type: DataTypes.DATE,
