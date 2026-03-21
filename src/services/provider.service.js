@@ -56,6 +56,9 @@ export const addProviderService = async (providerData) => {
         // Persist raw timeslot string on provider row as well
         timeslot: providerData.timeslot,
         permanent_address_id: permanent.id,
+        kycType: providerData.kycType,
+    kycNumber: providerData.kycNumber,
+    kycImage: providerData.kycImage || null,
         correspondence_address_id: correspondence.id,
         languageKnown: Array.isArray(providerData.languages)
   ? providerData.languages.join(",")

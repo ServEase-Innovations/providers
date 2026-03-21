@@ -78,6 +78,19 @@ const Provider = sequelize.define(
   allowNull: true
 },
 
+kycType: {
+  type: DataTypes.STRING,
+  field: "kyctype"
+},
+kycNumber: {
+  type: DataTypes.STRING,
+  field: "kycnumber"
+},
+kycImage: {
+  type: DataTypes.TEXT,
+  field: "kycimage"
+},
+
     emailId: {
       type: DataTypes.STRING,
       allowNull: false,
