@@ -56,10 +56,20 @@ export const addProviderService = async (providerData) => {
         // Persist raw timeslot string on provider row as well
         timeslot: providerData.timeslot,
         permanent_address_id: permanent.id,
-        correspondence_address_id: correspondence.id
+        kycType: providerData.kycType,
+    kycNumber: providerData.kycNumber,
+    kycImage: providerData.kycImage || null,
+        correspondence_address_id: correspondence.id,
+        languageKnown: Array.isArray(providerData.languages)
+  ? providerData.languages.join(",")
+  : providerData.languages,
+        vendorId: providerData.agentReferralId
+      ? Number(providerData.agentReferralId)
+      : null
       },
       { transaction }
     );
+
 
     // 3️⃣ Convert timeslot AFTER provider exists
     let finalWeeklySlots = [];

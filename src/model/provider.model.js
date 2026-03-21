@@ -49,6 +49,12 @@ const Provider = sequelize.define(
       field: "cookingSpeciality",
     },
 
+    vendorId: {
+  type: DataTypes.BIGINT,
+  allowNull: true, // ✅ important
+  field: "vendorid",
+},
+
     currentLocation: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -72,10 +78,23 @@ const Provider = sequelize.define(
     // swagger/request uses "languageKnown" (camelCase).
     // Sequelize will map this attribute to that column.
     languageKnown: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      field: "languageknown",
-    },
+  type: DataTypes.STRING,
+  field: "languageknown", // ✅ maps DB column
+  allowNull: true
+},
+
+kycType: {
+  type: DataTypes.STRING,
+  field: "kyctype"
+},
+kycNumber: {
+  type: DataTypes.STRING,
+  field: "kycnumber"
+},
+kycImage: {
+  type: DataTypes.TEXT,
+  field: "kycimage"
+},
 
     emailId: {
       type: DataTypes.STRING,
