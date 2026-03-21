@@ -44,6 +44,12 @@ const Provider = sequelize.define(
       field: "cookingSpeciality",
     },
 
+    vendorId: {
+  type: DataTypes.BIGINT,
+  allowNull: true, // ✅ important
+  field: "vendorid",
+},
+
     currentLocation: {
       type: DataTypes.STRING,
       allowNull: true,
