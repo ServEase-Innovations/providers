@@ -40,3 +40,5 @@ export const updateVendorService = async (vendorId, vendorData) => {
   await vendor.update(vendorData);
   return vendor;
 }
+
+
