@@ -201,6 +201,9 @@ WHERE
  *                 type: integer
  *                 example: 60
  *                 description: Duration of service per day (in minutes)
+ *               customerID:
+ *                 type: integer
+ *                 description: Optional. Searching customer (maps to engagements.customerid). When set, each provider includes previouslyBooked and previousBookingDetails.
  *
  *     responses:
  *       200:
@@ -230,6 +233,13 @@ WHERE
  *                       distance_km:
  *                         type: number
  *                         example: 0.07
+ *                       previouslyBooked:
+ *                         type: boolean
+ *                         description: Present when customerID was sent; true if this customer had any engagement with this provider.
+ *                       previousBookingDetails:
+ *                         type: object
+ *                         nullable: true
+ *                         description: Most recent engagement (by end_date, then created_at) when previouslyBooked is true.
  *                       monthlyAvailability:
  *                         type: object
  *                         properties:
@@ -449,6 +459,24 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 }
 
 
+const getAge = (dobString) =>{
+      const today = new Date();
+  const dob = new Date(dobString);
+
+  let age = today.getFullYear() - dob.getFullYear();
+
+  const monthDiff = today.getMonth() - dob.getMonth();
+  const dayDiff = today.getDate() - dob.getDate();
+
+  // Adjust if birthday hasn't occurred yet this year
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age--;
+  }
+  console.log(`Calculated age for DOB ${dobString}: ${age}`);
+  return age;
+    }
+
+
 
 
 router.post("/nearby-monthly", async (req, res) => {
@@ -463,7 +491,8 @@ router.post("/nearby-monthly", async (req, res) => {
       preferredStartTime,
       serviceDurationMinutes,
       page = 1,
-      limit = 10
+      limit = 10,
+      customerID
     } = req.body;
 
     if (
@@ -477,6 +506,11 @@ router.post("/nearby-monthly", async (req, res) => {
     ) {
       return res.status(400).json({ message: "Missing required fields" });
     }
+
+    const customerIdRaw =
+      customerID != null && customerID !== "" ? Number(customerID) : null;
+    const hasCustomerID =
+      customerIdRaw != null && !Number.isNaN(customerIdRaw);
 
     /* ---------- STEP 1: Nearby Providers ---------- */
     const providersRes = await pool.query(
@@ -499,7 +533,7 @@ router.post("/nearby-monthly", async (req, res) => {
         "pincode",
         "latitude",
         "longitude",
-        "age",
+        "dob",
         "housekeepingRole",
         (
           6371 * acos(
@@ -528,6 +562,52 @@ router.post("/nearby-monthly", async (req, res) => {
     }
 
     const providerIds = providersRes.rows.map(p => p.serviceproviderid);
+
+    /* ---------- Previous bookings for this customer (optional) ---------- */
+    let previousBookingByProvider = new Map();
+    if (hasCustomerID) {
+      const prevRes = await pool.query(
+        `
+        SELECT DISTINCT ON (e."serviceproviderid")
+          e."engagement_id" AS "engagementId",
+          e."serviceproviderid" AS "serviceproviderid",
+          e."booking_type" AS "bookingType",
+          e."service_type" AS "serviceType",
+          e."start_date" AS "startDate",
+          e."end_date" AS "endDate",
+          e."engagement_status" AS "engagementStatus",
+          e."assignment_status" AS "assignmentStatus",
+          e."task_status" AS "taskStatus",
+          e."active" AS "active",
+          e."base_amount" AS "baseAmount",
+          e."created_at" AS "createdAt"
+        FROM engagements e
+        WHERE e."customerid" = $1
+          AND e."serviceproviderid" = ANY($2::bigint[])
+        ORDER BY
+          e."serviceproviderid",
+          e."end_date" DESC NULLS LAST,
+          e."created_at" DESC NULLS LAST
+        `,
+        [customerIdRaw, providerIds]
+      );
+      for (const row of prevRes.rows) {
+        const id = String(row.serviceproviderid);
+        previousBookingByProvider.set(id, {
+          engagementId: row.engagementId != null ? String(row.engagementId) : null,
+          bookingType: row.bookingType,
+          serviceType: row.serviceType,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          engagementStatus: row.engagementStatus,
+          assignmentStatus: row.assignmentStatus,
+          taskStatus: row.taskStatus,
+          active: row.active,
+          baseAmount: row.baseAmount != null ? Number(row.baseAmount) : null,
+          createdAt: row.createdAt
+        });
+      }
+    }
 
     /* ---------- STEP 2: Fetch Weekly Slots ---------- */
     const weeklySlotsRes = await pool.query(
@@ -660,7 +740,7 @@ router.post("/nearby-monthly", async (req, res) => {
 
         const preferredEpoch = epochInIST(dateStr, preferredStartTime);
 
-        console.log(`Evaluating Provider ${p.serviceproviderid} on ${dateStr} with preferred time ${preferredStartTime}`);
+        // console.log(`Evaluating Provider ${p.serviceproviderid} on ${dateStr} with preferred time ${preferredStartTime}`);
 
         /* ---------- 1️⃣ Check Working Hours ---------- */
         const isInsideWorkingSlot = todaysSlots.some(slot => {
@@ -694,10 +774,6 @@ router.post("/nearby-monthly", async (req, res) => {
         );
 
 
-        console.log(`Provider ${p.serviceproviderid} on ${dateStr}: Preferred slot ${
-          preferredBlocked ? "BLOCKED" : "AVAILABLE"
-        }`
-        );
 
         if (!preferredBlocked) {
           daysAtPreferredTime++;
@@ -751,8 +827,9 @@ router.post("/nearby-monthly", async (req, res) => {
           });
         }
       }
+      
 
-      evaluatedProviders.push({
+      const providerRow = {
         serviceproviderid: p.serviceproviderid,
         firstName: p.firstName,
         lastName: p.lastName,
@@ -767,7 +844,7 @@ router.post("/nearby-monthly", async (req, res) => {
         pincode: p.pincode,
         latitude: p.latitude,
         longitude: p.longitude,
-        age: p.age,
+        age: p.dob != null ? getAge(p.dob) : null,
         housekeepingRole: p.housekeepingRole,
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
@@ -783,8 +860,18 @@ router.post("/nearby-monthly", async (req, res) => {
           },
           exceptions
         }
-      });
+      };
+
+      if (hasCustomerID) {
+        const pid = String(p.serviceproviderid);
+        const prev = previousBookingByProvider.get(pid);
+        providerRow.previouslyBooked = !!prev;
+        providerRow.previousBookingDetails = prev ?? null;
+      }
+
+      evaluatedProviders.push(providerRow);
     }
+
 
     /* ---------- STEP 5: Group & Rank ---------- */
     const available = evaluatedProviders.filter(
