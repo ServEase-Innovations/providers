@@ -449,6 +449,24 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 }
 
 
+const getAge = (dobString) =>{
+      const today = new Date();
+  const dob = new Date(dobString);
+
+  let age = today.getFullYear() - dob.getFullYear();
+
+  const monthDiff = today.getMonth() - dob.getMonth();
+  const dayDiff = today.getDate() - dob.getDate();
+
+  // Adjust if birthday hasn't occurred yet this year
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age--;
+  }
+  console.log(`Calculated age for DOB ${dobString}: ${age}`);
+  return age;
+    }
+
+
 
 
 router.post("/nearby-monthly", async (req, res) => {
@@ -478,6 +496,8 @@ router.post("/nearby-monthly", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    console.log
+
     /* ---------- STEP 1: Nearby Providers ---------- */
     const providersRes = await pool.query(
       `
@@ -499,7 +519,7 @@ router.post("/nearby-monthly", async (req, res) => {
         "pincode",
         "latitude",
         "longitude",
-        "age",
+        "dob",
         "housekeepingRole",
         (
           6371 * acos(
@@ -660,7 +680,7 @@ router.post("/nearby-monthly", async (req, res) => {
 
         const preferredEpoch = epochInIST(dateStr, preferredStartTime);
 
-        console.log(`Evaluating Provider ${p.serviceproviderid} on ${dateStr} with preferred time ${preferredStartTime}`);
+        // console.log(`Evaluating Provider ${p.serviceproviderid} on ${dateStr} with preferred time ${preferredStartTime}`);
 
         /* ---------- 1️⃣ Check Working Hours ---------- */
         const isInsideWorkingSlot = todaysSlots.some(slot => {
@@ -694,10 +714,6 @@ router.post("/nearby-monthly", async (req, res) => {
         );
 
 
-        console.log(`Provider ${p.serviceproviderid} on ${dateStr}: Preferred slot ${
-          preferredBlocked ? "BLOCKED" : "AVAILABLE"
-        }`
-        );
 
         if (!preferredBlocked) {
           daysAtPreferredTime++;
@@ -751,6 +767,7 @@ router.post("/nearby-monthly", async (req, res) => {
           });
         }
       }
+      
 
       evaluatedProviders.push({
         serviceproviderid: p.serviceproviderid,
@@ -767,7 +784,7 @@ router.post("/nearby-monthly", async (req, res) => {
         pincode: p.pincode,
         latitude: p.latitude,
         longitude: p.longitude,
-        age: p.age,
+        age: getAge(p.dob),
         housekeepingRole: p.housekeepingRole,
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
@@ -785,6 +802,7 @@ router.post("/nearby-monthly", async (req, res) => {
         }
       });
     }
+
 
     /* ---------- STEP 5: Group & Rank ---------- */
     const available = evaluatedProviders.filter(
