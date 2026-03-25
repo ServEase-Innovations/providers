@@ -9,9 +9,11 @@ import {
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
+import customParseFormat from "dayjs/plugin/customParseFormat.js";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
+dayjs.extend(customParseFormat);
 
 const router = Router();
 const { Pool } = pg;
@@ -458,6 +460,16 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && aEnd > bStart;
 }
 
+function isValidISODate(dateStr) {
+  if (typeof dateStr !== "string") return false;
+  return dayjs(dateStr, "YYYY-MM-DD", true).isValid();
+}
+
+function isValidTimeHHmm(timeStr) {
+  if (typeof timeStr !== "string") return false;
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr);
+}
+
 
 const getAge = (dobString) =>{
       const today = new Date();
@@ -505,6 +517,24 @@ router.post("/nearby-monthly", async (req, res) => {
       !serviceDurationMinutes
     ) {
       return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    if (!isValidISODate(startDate) || !isValidISODate(endDate)) {
+      return res.status(400).json({
+        message: "Invalid date format. Use YYYY-MM-DD for startDate and endDate.",
+      });
+    }
+
+    if (!isValidTimeHHmm(preferredStartTime)) {
+      return res.status(400).json({
+        message: "Invalid preferredStartTime. Use HH:mm (24-hour), e.g. 08:00.",
+      });
+    }
+
+    if (dayjs(endDate).isBefore(dayjs(startDate))) {
+      return res.status(400).json({
+        message: "endDate must be on/after startDate.",
+      });
     }
 
     const customerIdRaw =
@@ -889,6 +919,25 @@ router.post("/nearby-monthly", async (req, res) => {
     }
 
     const ordered = [...available, ...notAvailable];
+
+    // When a customer is searching, prioritize providers they booked before.
+    // This ensures previouslyBooked providers are visible in the first page.
+    if (hasCustomerID) {
+      for (const p of ordered) p.bestMatch = false;
+      ordered.sort((a, b) => {
+        const ap = a.previouslyBooked ? 1 : 0;
+        const bp = b.previouslyBooked ? 1 : 0;
+        if (bp !== ap) return bp - ap;
+
+        const af = a.monthlyAvailability.fullyAvailable ? 1 : 0;
+        const bf = b.monthlyAvailability.fullyAvailable ? 1 : 0;
+        if (bf !== af) return bf - af;
+
+        return a.distance_km - b.distance_km;
+      });
+
+      if (ordered.length > 0) ordered[0].bestMatch = true;
+    }
 
     /* ---------- STEP 6: Pagination ---------- */
     const startIndex = (page - 1) * limit;
