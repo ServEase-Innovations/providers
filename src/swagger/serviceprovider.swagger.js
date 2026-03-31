@@ -476,8 +476,29 @@
  *                 format: float
  *                 example: 77.57116
  *
+ *               weeklySlots:
+ *                 type: array
+ *                 description: When sent (including []), replaces provider_weekly_slots and rebuilds provider_daily_slots from today for 30 days. Same shape as on create; takes precedence over timeslot when non-empty.
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - dayOfWeek
+ *                     - start
+ *                     - end
+ *                   properties:
+ *                     dayOfWeek:
+ *                       type: integer
+ *                       example: 1
+ *                     start:
+ *                       type: string
+ *                       example: "06:00"
+ *                     end:
+ *                       type: string
+ *                       example: "20:00"
+ *
  *               timeslot:
  *                 type: string
+ *                 description: When sent, updates the stored timeslot string and rebuilds weekly/daily slot rows (same as create). Omit both timeslot and weeklySlots to leave availability unchanged.
  *                 example: "06:00-20:00"
  *
  *     responses:

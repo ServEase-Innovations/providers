@@ -65,6 +65,102 @@ export const getProviderByIdService = async (serviceproviderid) => {
   return await Provider.findByPk(serviceproviderid);
 };
 
+const convertTimeslotString = (timeslot) => {
+  if (!timeslot) return [];
+
+  const ranges = timeslot.split(",");
+  const weeklySlots = [];
+
+  for (let day = 0; day <= 6; day++) {
+    for (const range of ranges) {
+      const [start, end] = range.trim().split("-");
+
+      if (!start || !end) {
+        throw new Error("Invalid timeslot format");
+      }
+
+      if (start >= end) {
+        throw new Error("Start time must be before end time");
+      }
+
+      weeklySlots.push({
+        dayOfWeek: day,
+        start,
+        end,
+      });
+    }
+  }
+
+  return weeklySlots;
+};
+
+/** Same rules as create: prefer explicit weeklySlots, else parse timeslot string. */
+function resolveFinalWeeklySlots({ weeklySlots, timeslot }) {
+  if (weeklySlots && weeklySlots.length > 0) {
+    return weeklySlots;
+  }
+  if (timeslot) {
+    return convertTimeslotString(timeslot);
+  }
+  return [];
+}
+
+async function replaceProviderSlotTables(
+  serviceproviderid,
+  finalWeeklySlots,
+  transaction
+) {
+  await ProviderWeeklySlot.destroy({
+    where: { serviceproviderid },
+    transaction,
+  });
+
+  await sequelize.query(
+    `DELETE FROM provider_daily_slots
+     WHERE serviceproviderid = :providerId AND slot_date >= CURRENT_DATE`,
+    { replacements: { providerId: serviceproviderid }, transaction }
+  );
+
+  if (finalWeeklySlots.length === 0) {
+    return;
+  }
+
+  const slotRows = finalWeeklySlots.map((slot) => ({
+    serviceproviderid,
+    dayOfWeek: slot.dayOfWeek,
+    slotStart: slot.start,
+    slotEnd: slot.end,
+  }));
+
+  await ProviderWeeklySlot.bulkCreate(slotRows, { transaction });
+
+  await sequelize.query(
+    `INSERT INTO provider_daily_slots (
+        serviceproviderid,
+        slot_date,
+        slot_start,
+        slot_end
+      )
+      SELECT
+        ws.serviceproviderid,
+        d::date,
+        (d::date + ws.slot_start),
+        (d::date + ws.slot_end)
+      FROM provider_weekly_slots ws
+      JOIN generate_series(
+        CURRENT_DATE,
+        CURRENT_DATE + INTERVAL '30 days',
+        INTERVAL '1 day'
+      ) d
+      ON EXTRACT(DOW FROM d) = ws.day_of_week
+      WHERE ws.serviceproviderid = :providerId`,
+    {
+      replacements: { providerId: serviceproviderid },
+      transaction,
+    }
+  );
+}
+
 export const addProviderService = async (providerData) => {
   const transaction = await sequelize.transaction();
 
@@ -127,53 +223,12 @@ export const addProviderService = async (providerData) => {
       { transaction }
     );
 
-
-    // 3️⃣ Convert timeslot AFTER provider exists
-    let finalWeeklySlots = [];
-
-    if (weeklySlots && weeklySlots.length > 0) {
-      finalWeeklySlots = weeklySlots;
-    } else if (timeslot) {
-      finalWeeklySlots = convertTimeslotString(timeslot);
-    }
-
-    // 4️⃣ Insert weekly slots
-    if (finalWeeklySlots.length > 0) {
-      const slotRows = finalWeeklySlots.map(slot => ({
-    serviceproviderid: provider.serviceproviderid,
-    dayOfWeek: slot.dayOfWeek,
-    slotStart: slot.start,
-    slotEnd: slot.end,
-  }));
-
-      await ProviderWeeklySlot.bulkCreate(slotRows, { transaction });
-    }
-
-    // 5️⃣ Generate daily slots
-    await sequelize.query(`
-      INSERT INTO provider_daily_slots (
-        serviceproviderid,
-        slot_date,
-        slot_start,
-        slot_end
-      )
-      SELECT
-        ws.serviceproviderid,
-        d::date,
-        (d::date + ws.slot_start),
-        (d::date + ws.slot_end)
-      FROM provider_weekly_slots ws
-      JOIN generate_series(
-        CURRENT_DATE,
-        CURRENT_DATE + INTERVAL '30 days',
-        INTERVAL '1 day'
-      ) d
-      ON EXTRACT(DOW FROM d) = ws.day_of_week
-      WHERE ws.serviceproviderid = :providerId
-    `, {
-      replacements: { providerId: provider.serviceproviderid },
+    const finalWeeklySlots = resolveFinalWeeklySlots({ weeklySlots, timeslot });
+    await replaceProviderSlotTables(
+      provider.serviceproviderid,
+      finalWeeklySlots,
       transaction
-    });
+    );
 
     await ServiceProviderRole.bulkCreate(
       resolvedRoles.map((role) => ({
@@ -205,35 +260,6 @@ function resolveHousekeepingRoles(providerData) {
   ];
 }
 
-
-const convertTimeslotString = (timeslot) => {
-  if (!timeslot) return [];
-
-  const ranges = timeslot.split(",");
-  const weeklySlots = [];
-
-  for (let day = 0; day <= 6; day++) {
-    for (const range of ranges) {
-      const [start, end] = range.trim().split("-");
-
-      if (!start || !end) {
-        throw new Error("Invalid timeslot format");
-      }
-
-      if (start >= end) {
-        throw new Error("Start time must be before end time");
-      }
-
-      weeklySlots.push({
-        dayOfWeek: day,
-        start,
-        end
-      });
-    }
-  }
-
-  return weeklySlots;
-};
 export const updateProviderService = async (serviceproviderid, providerData) => {
   const provider = await Provider.findByPk(serviceproviderid);
 
@@ -245,37 +271,77 @@ export const updateProviderService = async (serviceproviderid, providerData) => 
     housekeepingRoles,
     housekeepingRole: _ignoredHousekeepingRole,
     nannyCareType,
+    weeklySlots,
+    timeslot,
+    languages,
+    agentReferralId,
     ...providerFields
   } = providerData;
 
   if (nannyCareType !== undefined) {
     providerFields.nannyCareType = normalizeNannyCareTypesForDb(nannyCareType);
   }
+  if (timeslot !== undefined) {
+    providerFields.timeslot = timeslot;
+  }
+  if (languages !== undefined) {
+    providerFields.languageKnown = Array.isArray(languages)
+      ? languages.join(",")
+      : languages;
+  }
+  if (agentReferralId !== undefined) {
+    providerFields.vendorId = agentReferralId ? Number(agentReferralId) : null;
+  }
+
+  const shouldRefreshSlots =
+    weeklySlots !== undefined || timeslot !== undefined;
+  const finalWeeklySlotsForRefresh = shouldRefreshSlots
+    ? resolveFinalWeeklySlots({ weeklySlots, timeslot })
+    : null;
+
+  const sid = provider.serviceproviderid;
 
   if (Array.isArray(housekeepingRoles)) {
-    const sid = provider.serviceproviderid;
     const t = await sequelize.transaction();
     try {
-      await provider.update(providerFields, { transaction: t });
-      await ServiceProviderRole.destroy({
-        where: { serviceproviderid: sid },
-        transaction: t,
-      });
       const roles = [
         ...new Set(
           housekeepingRoles.map((r) => String(r).trim()).filter(Boolean)
         ),
       ];
+      await provider.update(
+        {
+          ...providerFields,
+          housekeepingRole: roles[0] ?? null,
+        },
+        { transaction: t }
+      );
+      if (shouldRefreshSlots) {
+        await replaceProviderSlotTables(sid, finalWeeklySlotsForRefresh, t);
+      }
+      await ServiceProviderRole.destroy({
+        where: { serviceproviderid: sid },
+        transaction: t,
+      });
       if (roles.length > 0) {
         await ServiceProviderRole.bulkCreate(
           roles.map((role) => ({ serviceproviderid: sid, role })),
           { transaction: t }
         );
       }
-      await provider.update(
-        { housekeepingRole: roles[0] ?? null },
-        { transaction: t }
-      );
+      await t.commit();
+    } catch (e) {
+      await t.rollback();
+      throw e;
+    }
+    return provider.reload();
+  }
+
+  if (shouldRefreshSlots) {
+    const t = await sequelize.transaction();
+    try {
+      await provider.update(providerFields, { transaction: t });
+      await replaceProviderSlotTables(sid, finalWeeklySlotsForRefresh, t);
       await t.commit();
     } catch (e) {
       await t.rollback();
