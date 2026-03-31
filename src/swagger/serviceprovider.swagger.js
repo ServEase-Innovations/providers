@@ -74,17 +74,14 @@
  *
  *               nannyCareType:
  *                 type: array
- *                 description: Types of nanny care offered (optional). Each item must be one of the enum values.
+ *                 description: >
+ *                   Optional care-type codes (any string, e.g. BABY_CARE, ELDERLY_CARE).
+ *                   You may also send a single comma-separated string instead of an array.
  *                 items:
  *                   type: string
- *                   enum:
- *                     - ELDERLY_CARE
- *                     - INFANT_CARE
- *                     - TODDLER_CARE
- *                     - CHILD_CARE
- *                     - SPECIAL_NEEDS
+ *                   example: "BABY_CARE"
  *                 example:
- *                   - ELDERLY_CARE
+ *                   - "BABY_CARE"
  *
  *               diet:
  *                 type: string
@@ -253,8 +250,7 @@
  *               - "COOK"
  *               - "NANNY"
  *             nannyCareType:
- *               - ELDERLY_CARE
- *               - CHILD_CARE
+ *               - "BABY_CARE"
  *             diet: "NONVEG"
  *             languages:
  *               - "Bengali"
@@ -420,15 +416,10 @@
  *
  *               nannyCareType:
  *                 type: array
- *                 description: Replaces stored care types. Send [] to clear. Each item must be one of the enum values.
+ *                 description: Replaces stored care types. Send [] to clear. Items are free-form strings (or use a comma-separated string).
  *                 items:
  *                   type: string
- *                   enum:
- *                     - ELDERLY_CARE
- *                     - INFANT_CARE
- *                     - TODDLER_CARE
- *                     - CHILD_CARE
- *                     - SPECIAL_NEEDS
+ *                   example: "BABY_CARE"
  *
  *               diet:
  *                 type: string

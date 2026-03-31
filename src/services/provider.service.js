@@ -5,15 +5,7 @@ import { sequelize } from "../config/database.js";
 import ProviderWeeklySlot from "../model/providerWeeklySlot.model.js";
 import ServiceProviderRole from "../model/serviceProviderRole.model.js";
 
-/** Allowed values for request body `nannyCareType` (array items). */
-const NANNY_CARE_TYPES = new Set([
-  "ELDERLY_CARE",
-  "INFANT_CARE",
-  "TODDLER_CARE",
-  "CHILD_CARE",
-  "SPECIAL_NEEDS",
-]);
-
+/** `nannyCareType`: free-form string codes; stored comma-separated in DB. */
 function normalizeNannyCareTypesForDb(val) {
   if (val === null || val === "") return null;
   let items;
@@ -29,16 +21,6 @@ function normalizeNannyCareTypesForDb(val) {
     throw err;
   }
   const uniq = [...new Set(items.map((v) => String(v).trim()).filter(Boolean))];
-  const invalid = uniq.filter((x) => !NANNY_CARE_TYPES.has(x));
-  if (invalid.length) {
-    const err = new Error(
-      `Invalid nannyCareType: ${invalid.join(
-        ", "
-      )}. Allowed: ${[...NANNY_CARE_TYPES].join(", ")}`
-    );
-    err.statusCode = 400;
-    throw err;
-  }
   return uniq.length ? uniq.join(",") : null;
 }
 

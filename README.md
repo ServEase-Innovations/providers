@@ -68,7 +68,7 @@ npm start              # node src/server.js
 **Provider domain highlights**
 
 - **Roles:** Canonical list is **`housekeepingRoles`** (array). Persisted in `serviceprovider_roles`; legacy column `housekeepingRole` is kept in sync (typically first role). Nearby search matches junction roles, with a fallback when the junction omits the searched role but `housekeepingRole` matches.
-- **Nanny care:** `nannyCareType` is an array of enums (e.g. `ELDERLY_CARE`, `INFANT_CARE`, …) stored in column `nannycaretypes` (comma-separated). See migration `sql/add_nannycaretypes_column.sql`.
+- **Nanny care:** `nannyCareType` is an array of free-form string codes (or a comma-separated string), stored in column `nannycaretypes` as comma-separated text. See migration `sql/add_nannycaretypes_column.sql`.
 - **Availability:** On create, `weeklySlots` or parsed `timeslot` populate `provider_weekly_slots` and seed `provider_daily_slots` for a forward window. On update, sending `timeslot` and/or `weeklySlots` replaces weekly rows and rebuilds future daily rows.
 - **Nearby-monthly:** Uses bounding-box prefilter, haversine distance, parallel DB reads, IST calendar walks, merges `provider_availability` with engagement fallbacks, and ranks primarily by **distance** so partially available nearby providers are not pushed past arbitrarily “greener” far listings. Response may truncate `exceptions` with `exceptionsTotal` / `exceptionsTruncated`.
 
