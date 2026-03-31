@@ -1,11 +1,12 @@
 //Centralized error handling middleware
 const errorHandling = (err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-        status:500,
-        message: "Internal Server Error",
-        error: err.message
-    });
-}
+  const status = err.statusCode || 500;
+  res.status(status).json({
+    status,
+    message: status === 500 ? "Internal Server Error" : err.message,
+    error: err.message,
+  });
+};
 
 export default errorHandling;

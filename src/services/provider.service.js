@@ -1,7 +1,46 @@
+import "../model/index.js";
 import Provider from "../model/provider.model.js";
 import Address from "../model/address.model.js";
-import { sequelize } from "../config/database.js"; 
+import { sequelize } from "../config/database.js";
 import ProviderWeeklySlot from "../model/providerWeeklySlot.model.js";
+import ServiceProviderRole from "../model/serviceProviderRole.model.js";
+
+/** Allowed values for request body `nannyCareType` (array items). */
+const NANNY_CARE_TYPES = new Set([
+  "ELDERLY_CARE",
+  "INFANT_CARE",
+  "TODDLER_CARE",
+  "CHILD_CARE",
+  "SPECIAL_NEEDS",
+]);
+
+function normalizeNannyCareTypesForDb(val) {
+  if (val === null || val === "") return null;
+  let items;
+  if (Array.isArray(val)) {
+    items = val;
+  } else if (typeof val === "string") {
+    items = val.split(",").map((s) => s.trim()).filter(Boolean);
+  } else {
+    const err = new Error(
+      "nannyCareType must be an array of strings or a comma-separated string"
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+  const uniq = [...new Set(items.map((v) => String(v).trim()).filter(Boolean))];
+  const invalid = uniq.filter((x) => !NANNY_CARE_TYPES.has(x));
+  if (invalid.length) {
+    const err = new Error(
+      `Invalid nannyCareType: ${invalid.join(
+        ", "
+      )}. Allowed: ${[...NANNY_CARE_TYPES].join(", ")}`
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+  return uniq.length ? uniq.join(",") : null;
+}
 
 export const getPaginatedProvidersService = async (limit, offset) => {
     return await Provider.findAndCountAll({
@@ -35,8 +74,22 @@ export const addProviderService = async (providerData) => {
       correspondenceAddress,
       weeklySlots,
       timeslot,
+      housekeepingRoles,
+      housekeepingRole: _ignoredHousekeepingRole,
+      nannyCareType,
+      languages,
+      agentReferralId,
       ...serviceproviderdata
     } = providerData;
+
+    const resolvedRoles = resolveHousekeepingRoles(providerData);
+    if (resolvedRoles.length === 0) {
+      const err = new Error(
+        "housekeepingRoles is required: send a non-empty array, e.g. [\"COOK\",\"MAID\"]"
+      );
+      err.statusCode = 400;
+      throw err;
+    }
 
     // 1️⃣ Create addresses
     const correspondence = await Address.create(
@@ -53,6 +106,7 @@ export const addProviderService = async (providerData) => {
     const provider = await Provider.create(
       {
         ...serviceproviderdata,
+        housekeepingRole: resolvedRoles[0] ?? null,
         // Persist raw timeslot string on provider row as well
         timeslot: providerData.timeslot,
         permanent_address_id: permanent.id,
@@ -60,11 +114,14 @@ export const addProviderService = async (providerData) => {
     kycNumber: providerData.kycNumber,
     kycImage: providerData.kycImage || null,
         correspondence_address_id: correspondence.id,
-        languageKnown: Array.isArray(providerData.languages)
-  ? providerData.languages.join(",")
-  : providerData.languages,
-        vendorId: providerData.agentReferralId
-      ? Number(providerData.agentReferralId)
+        languageKnown: Array.isArray(languages)
+  ? languages.join(",")
+  : languages,
+        ...(nannyCareType !== undefined && {
+          nannyCareType: normalizeNannyCareTypesForDb(nannyCareType),
+        }),
+        vendorId: agentReferralId
+      ? Number(agentReferralId)
       : null
       },
       { transaction }
@@ -118,6 +175,14 @@ export const addProviderService = async (providerData) => {
       transaction
     });
 
+    await ServiceProviderRole.bulkCreate(
+      resolvedRoles.map((role) => ({
+        serviceproviderid: provider.serviceproviderid,
+        role,
+      })),
+      { transaction }
+    );
+
     await transaction.commit();
     return provider;
 
@@ -127,6 +192,18 @@ export const addProviderService = async (providerData) => {
     throw error;
   }
 };
+
+/** Unique non-empty roles from housekeepingRoles[] only. */
+function resolveHousekeepingRoles(providerData) {
+  if (!Array.isArray(providerData.housekeepingRoles)) return [];
+  return [
+    ...new Set(
+      providerData.housekeepingRoles
+        .map((r) => String(r).trim())
+        .filter(Boolean)
+    ),
+  ];
+}
 
 
 const convertTimeslotString = (timeslot) => {
@@ -164,6 +241,49 @@ export const updateProviderService = async (serviceproviderid, providerData) => 
     return null;
   }
 
-  await provider.update(providerData);
+  const {
+    housekeepingRoles,
+    housekeepingRole: _ignoredHousekeepingRole,
+    nannyCareType,
+    ...providerFields
+  } = providerData;
+
+  if (nannyCareType !== undefined) {
+    providerFields.nannyCareType = normalizeNannyCareTypesForDb(nannyCareType);
+  }
+
+  if (Array.isArray(housekeepingRoles)) {
+    const sid = provider.serviceproviderid;
+    const t = await sequelize.transaction();
+    try {
+      await provider.update(providerFields, { transaction: t });
+      await ServiceProviderRole.destroy({
+        where: { serviceproviderid: sid },
+        transaction: t,
+      });
+      const roles = [
+        ...new Set(
+          housekeepingRoles.map((r) => String(r).trim()).filter(Boolean)
+        ),
+      ];
+      if (roles.length > 0) {
+        await ServiceProviderRole.bulkCreate(
+          roles.map((role) => ({ serviceproviderid: sid, role })),
+          { transaction: t }
+        );
+      }
+      await provider.update(
+        { housekeepingRole: roles[0] ?? null },
+        { transaction: t }
+      );
+      await t.commit();
+    } catch (e) {
+      await t.rollback();
+      throw e;
+    }
+    return provider.reload();
+  }
+
+  await provider.update(providerFields);
   return provider;
 };

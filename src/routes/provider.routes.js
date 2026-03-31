@@ -637,41 +637,56 @@ router.post("/nearby-monthly", async (req, res) => {
     const providersRes = await pool.query(
       `
       SELECT
-        "serviceproviderid",
-        "firstName",
-        "lastName",
-        "gender",
-        "experience",
-        "rating",
-        "profilepic",
-        "mobileNo",
-        "emailId",
-        "diet",
-        "cookingSpeciality",
-        "languageknown",
-        "locality",
-        "location",
-        "pincode",
-        "latitude",
-        "longitude",
-        "dob",
-        "timeslot",
-        "housekeepingRole",
+        sp."serviceproviderid",
+        sp."firstName",
+        sp."lastName",
+        sp."gender",
+        sp."experience",
+        sp."rating",
+        sp."profilepic",
+        sp."mobileNo",
+        sp."emailId",
+        sp."diet",
+        sp."cookingSpeciality",
+        sp."languageknown",
+        sp."locality",
+        sp."location",
+        sp."pincode",
+        sp."latitude",
+        sp."longitude",
+        sp."dob",
+        sp."timeslot",
+        sp."housekeepingRole",
         (
           6371 * acos(
-            cos(radians($1)) * cos(radians("latitude")) *
-            cos(radians("longitude") - radians($2)) +
-            sin(radians($1)) * sin(radians("latitude"))
+            cos(radians($1)) * cos(radians(sp."latitude")) *
+            cos(radians(sp."longitude") - radians($2)) +
+            sin(radians($1)) * sin(radians(sp."latitude"))
           )
         ) AS distance_km
-      FROM "serviceprovider"
-      WHERE "isactive" = true
-        AND "housekeepingRole" = $3
+      FROM "serviceprovider" sp
+      WHERE sp."isactive" = true
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM serviceprovider_roles r
+            WHERE r.serviceproviderid = sp."serviceproviderid"
+              AND r.role = $3
+          )
+          OR (
+            NOT EXISTS (
+              SELECT 1
+              FROM serviceprovider_roles r2
+              WHERE r2.serviceproviderid = sp."serviceproviderid"
+            )
+            AND sp."housekeepingRole" = $3
+          )
+        )
         AND (
           6371 * acos(
-            cos(radians($1)) * cos(radians("latitude")) *
-            cos(radians("longitude") - radians($2)) +
-            sin(radians($1)) * sin(radians("latitude"))
+            cos(radians($1)) * cos(radians(sp."latitude")) *
+            cos(radians(sp."longitude") - radians($2)) +
+            sin(radians($1)) * sin(radians(sp."latitude"))
           )
         ) <= $4
       ORDER BY distance_km ASC
@@ -684,6 +699,22 @@ router.post("/nearby-monthly", async (req, res) => {
     }
 
     const providerIds = providersRes.rows.map(p => p.serviceproviderid);
+
+    const rolesRes = await pool.query(
+      `
+      SELECT serviceproviderid, role
+      FROM serviceprovider_roles
+      WHERE serviceproviderid = ANY($1::bigint[])
+      ORDER BY role
+      `,
+      [providerIds]
+    );
+    const rolesBySpId = {};
+    for (const row of rolesRes.rows) {
+      const id = String(row.serviceproviderid);
+      rolesBySpId[id] ??= [];
+      rolesBySpId[id].push(row.role);
+    }
 
     /* ---------- Previous bookings for this customer (optional) ---------- */
     let previousBookingByProvider = new Map();
@@ -1044,6 +1075,12 @@ router.post("/nearby-monthly", async (req, res) => {
         longitude: p.longitude,
         age: p.dob != null ? getAge(p.dob) : null,
         housekeepingRole: p.housekeepingRole,
+        housekeepingRoles:
+          rolesBySpId[String(p.serviceproviderid)]?.length > 0
+            ? rolesBySpId[String(p.serviceproviderid)]
+            : p.housekeepingRole
+              ? [p.housekeepingRole]
+              : [],
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
         monthlyAvailability: {

@@ -21,6 +21,7 @@
  *               - locality
  *               - pincode
  *               - street
+ *               - housekeepingRoles
  *             properties:
  *
  *               # --- BASIC DETAILS ---
@@ -63,9 +64,27 @@
  *                 type: integer
  *                 example: 10
  *
- *               housekeepingRole:
- *                 type: string
- *                 example: "COOK"
+ *               housekeepingRoles:
+ *                 type: array
+ *                 minItems: 1
+ *                 description: All roles this provider can work as (COOK, MAID, NANNY, ...). Only source of roles on create.
+ *                 items:
+ *                   type: string
+ *                   example: "COOK"
+ *
+ *               nannyCareType:
+ *                 type: array
+ *                 description: Types of nanny care offered (optional). Each item must be one of the enum values.
+ *                 items:
+ *                   type: string
+ *                   enum:
+ *                     - ELDERLY_CARE
+ *                     - INFANT_CARE
+ *                     - TODDLER_CARE
+ *                     - CHILD_CARE
+ *                     - SPECIAL_NEEDS
+ *                 example:
+ *                   - ELDERLY_CARE
  *
  *               diet:
  *                 type: string
@@ -194,6 +213,83 @@
  *                     type: string
  *                     example: "India"
  *
+ *               languages:
+ *                 type: array
+ *                 description: Stored as languageKnown (comma-separated). Use this or languageKnown string.
+ *                 items:
+ *                   type: string
+ *                   example: "Bengali"
+ *
+ *               currentLocation:
+ *                 type: string
+ *               nearbyLocation:
+ *                 type: string
+ *               location:
+ *                 type: string
+ *               kycType:
+ *                 type: string
+ *               kycNumber:
+ *                 type: string
+ *               kycImage:
+ *                 type: string
+ *               keyFacts:
+ *                 type: boolean
+ *               agentReferralId:
+ *                 description: Vendor / agent id; stored as vendorId. Omit or null if none.
+ *                 oneOf:
+ *                   - type: integer
+ *                   - type: string
+ *
+ *           example:
+ *             firstName: "Rammy1"
+ *             middleName: ""
+ *             lastName: "Singha Roy"
+ *             mobileNo: 8555698558
+ *             alternateNo: 0
+ *             emailId: "rammy1@gmail.com"
+ *             gender: "FEMALE"
+ *             dob: "2003-05-30"
+ *             housekeepingRoles:
+ *               - "COOK"
+ *               - "NANNY"
+ *             nannyCareType:
+ *               - ELDERLY_CARE
+ *               - CHILD_CARE
+ *             diet: "NONVEG"
+ *             languages:
+ *               - "Bengali"
+ *             cookingSpeciality: "NONVEG"
+ *             experience: 1
+ *             buildingName: "notSpecified"
+ *             street: "Bhandarhati-Dhaniakhali Road"
+ *             locality: "Bhagabatipur"
+ *             pincode: 712405
+ *             latitude: 22.867972
+ *             longitude: 88.108881
+ *             currentLocation: "V495+4FH, Bhandarhati-Dhaniakhali Rd, Bhagabatipur, West Bengal 712405, India"
+ *             nearbyLocation: ""
+ *             location: "V495+4FH, Bhandarhati-Dhaniakhali Rd, Bhagabatipur, West Bengal 712405, India"
+ *             timeslot: "06:00-20:00"
+ *             isactive: true
+ *             kycType: "AADHAR"
+ *             kycNumber: "785569858588"
+ *             keyFacts: true
+ *             agentReferralId: null
+ *             permanentAddress:
+ *               field1: "notSpecified"
+ *               field2: "Bhandarhati-Dhaniakhali Road"
+ *               ctarea: "Bhagabatipur"
+ *               pinno: "712405"
+ *               state: "West Bengal"
+ *               country: "India"
+ *             correspondenceAddress:
+ *               field1: "notSpecified"
+ *               field2: "Bhandarhati-Dhaniakhali Road"
+ *               ctarea: "Bhagabatipur"
+ *               pinno: "712405"
+ *               state: "West Bengal"
+ *               country: "India"
+ *
  *     responses:
  *       201:
  *         description: Service provider created successfully
@@ -315,9 +411,24 @@
  *                 type: integer
  *                 example: 10
  *
- *               housekeepingRole:
- *                 type: string
- *                 example: "COOK"
+ *               housekeepingRoles:
+ *                 type: array
+ *                 description: When sent, replaces all roles in serviceprovider_roles and syncs legacy housekeepingRole column to the first entry.
+ *                 items:
+ *                   type: string
+ *                   example: "MAID"
+ *
+ *               nannyCareType:
+ *                 type: array
+ *                 description: Replaces stored care types. Send [] to clear. Each item must be one of the enum values.
+ *                 items:
+ *                   type: string
+ *                   enum:
+ *                     - ELDERLY_CARE
+ *                     - INFANT_CARE
+ *                     - TODDLER_CARE
+ *                     - CHILD_CARE
+ *                     - SPECIAL_NEEDS
  *
  *               diet:
  *                 type: string
