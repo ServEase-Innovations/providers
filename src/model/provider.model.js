@@ -132,7 +132,7 @@ kycImage: {
       field: "housekeepingRole",
     },
 
-    // Request/response: nannyCareType (string[]). DB: comma-separated TEXT.
+    // Request/response: nannyCareType (codes as string[] or CSV). DB: comma-separated TEXT.
     nannyCareType: {
       type: DataTypes.STRING,
       allowNull: true,
