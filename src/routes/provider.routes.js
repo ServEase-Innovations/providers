@@ -1,12 +1,19 @@
 import { Router } from "express";
 import pg from "pg";
-import { addProvider, getPaginatedProviders } from "../controllers/provider.controller.js";
+import {
+  addProvider,
+  getPaginatedProviders,
+  getProviderById,
+ updateProvider
+} from "../controllers/provider.controller.js";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
+import customParseFormat from "dayjs/plugin/customParseFormat.js";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
+dayjs.extend(customParseFormat);
 
 const router = Router();
 const { Pool } = pg;
@@ -196,6 +203,9 @@ WHERE
  *                 type: integer
  *                 example: 60
  *                 description: Duration of service per day (in minutes)
+ *               customerID:
+ *                 type: integer
+ *                 description: Optional. Searching customer (maps to engagements.customerid). When set, each provider includes previouslyBooked and previousBookingDetails.
  *
  *     responses:
  *       200:
@@ -225,6 +235,16 @@ WHERE
  *                       distance_km:
  *                         type: number
  *                         example: 0.07
+ *                       previouslyBooked:
+ *                         type: boolean
+ *                         description: Present when customerID was sent; true if this customer had any engagement with this provider.
+ *                       previousBookingDetails:
+ *                         type: object
+ *                         nullable: true
+ *                         description: Most recent engagement (by end_date, then created_at) when previouslyBooked is true.
+ *                       availabilityFromDb:
+ *                         type: object
+ *                         description: How weekly hours and booked time were sourced for overlap checks in this date range.
  *                       monthlyAvailability:
  *                         type: object
  *                         properties:
@@ -443,6 +463,118 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && aEnd > bStart;
 }
 
+/**
+ * Some monthly bookings store slot_start/slot_end as the full engagement range on every
+ * provider_availability row. That makes any preferred time look blocked. Collapse to one
+ * interval on the row's calendar date (IST) using wall-clock from start_epoch and a sane
+ * duration (from engagement when <= 24h, else 60 minutes).
+ */
+function normalizeProviderAvailabilityBookedSlot(
+  dateStr,
+  startEpoch,
+  endEpoch,
+  engagementDurationMinutes
+) {
+  const start = Number(startEpoch);
+  const end = Number(endEpoch);
+  if (!(start < end)) return null;
+
+  const span = end - start;
+  const dayStart = epochInIST(dateStr, "00:00");
+  const dayEnd = dayStart + 86400;
+
+  let durSec =
+    engagementDurationMinutes != null &&
+    engagementDurationMinutes >= 1 &&
+    engagementDurationMinutes <= 24 * 60
+      ? engagementDurationMinutes * 60
+      : 3600;
+
+  if (span > 2 * 86400) {
+    const wall = dayjs.unix(start).tz("Asia/Kolkata").format("HH:mm");
+    const blockStart = epochInIST(dateStr, wall);
+    const blockEnd = blockStart + durSec;
+    const clipStart = Math.max(blockStart, dayStart);
+    const clipEnd = Math.min(blockEnd, dayEnd);
+    if (clipEnd > clipStart) {
+      return { slot_start_epoch: clipStart, slot_end_epoch: clipEnd };
+    }
+    return null;
+  }
+
+  const i0 = Math.max(start, dayStart);
+  const i1 = Math.min(end, dayEnd);
+  if (i1 > i0) return { slot_start_epoch: i0, slot_end_epoch: i1 };
+  return null;
+}
+
+/** pg TIME / string → HH:mm for epochInIST */
+function normalizeTimeForEpoch(t) {
+  if (t == null) return "00:00";
+  if (t instanceof Date) {
+    return `${String(t.getUTCHours()).padStart(2, "0")}:${String(
+      t.getUTCMinutes()
+    ).padStart(2, "0")}`;
+  }
+  const s = String(t).trim();
+  if (/^\d{1,2}:\d{2}:\d{2}/.test(s)) return s.slice(0, 5);
+  if (/^\d{1,2}:\d{2}$/.test(s)) {
+    const [h, m] = s.split(":");
+    return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
+  }
+  return s.slice(0, 5);
+}
+
+/**
+ * Same shape as provider_weekly_slots rows (day_of_week 0–6 Sun–Sat, HH:mm).
+ * Mirrors onboarding convertTimeslotString: each range applies to every weekday.
+ */
+function weeklySlotsFromTimeslotString(timeslot) {
+  if (!timeslot || typeof timeslot !== "string") return [];
+  const ranges = timeslot.split(",");
+  const slots = [];
+  for (let day = 0; day <= 6; day++) {
+    for (const range of ranges) {
+      const [start, end] = range.trim().split("-");
+      if (!start || !end || start.trim() >= end.trim()) continue;
+      slots.push({
+        day_of_week: day,
+        slot_start: start.trim().slice(0, 5),
+        slot_end: end.trim().slice(0, 5)
+      });
+    }
+  }
+  return slots;
+}
+
+function isValidISODate(dateStr) {
+  if (typeof dateStr !== "string") return false;
+  return dayjs(dateStr, "YYYY-MM-DD", true).isValid();
+}
+
+function isValidTimeHHmm(timeStr) {
+  if (typeof timeStr !== "string") return false;
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr);
+}
+
+
+const getAge = (dobString) =>{
+      const today = new Date();
+  const dob = new Date(dobString);
+
+  let age = today.getFullYear() - dob.getFullYear();
+
+  const monthDiff = today.getMonth() - dob.getMonth();
+  const dayDiff = today.getDate() - dob.getDate();
+
+  // Adjust if birthday hasn't occurred yet this year
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age--;
+  }
+  console.log(`Calculated age for DOB ${dobString}: ${age}`);
+  return age;
+    }
+
 
 
 
@@ -458,7 +590,9 @@ router.post("/nearby-monthly", async (req, res) => {
       preferredStartTime,
       serviceDurationMinutes,
       page = 1,
-      limit = 10
+      limit = 10,
+      customerID,
+      customerId
     } = req.body;
 
     if (
@@ -473,44 +607,86 @@ router.post("/nearby-monthly", async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    if (!isValidISODate(startDate) || !isValidISODate(endDate)) {
+      return res.status(400).json({
+        message: "Invalid date format. Use YYYY-MM-DD for startDate and endDate.",
+      });
+    }
+
+    if (!isValidTimeHHmm(preferredStartTime)) {
+      return res.status(400).json({
+        message: "Invalid preferredStartTime. Use HH:mm (24-hour), e.g. 08:00.",
+      });
+    }
+
+    if (dayjs(endDate).isBefore(dayjs(startDate))) {
+      return res.status(400).json({
+        message: "endDate must be on/after startDate.",
+      });
+    }
+
+    const customerIdInput = customerID ?? customerId;
+    const customerIdRaw =
+      customerIdInput != null && customerIdInput !== ""
+        ? Number(customerIdInput)
+        : null;
+    const hasCustomerID =
+      customerIdRaw != null && !Number.isNaN(customerIdRaw);
+
     /* ---------- STEP 1: Nearby Providers ---------- */
     const providersRes = await pool.query(
       `
       SELECT
-        "serviceproviderid",
-        "firstName",
-        "lastName",
-        "gender",
-        "experience",
-        "rating",
-        "profilepic",
-        "mobileNo",
-        "emailId",
-        "diet",
-        "cookingSpeciality",
-        "languageknown",
-        "locality",
-        "location",
-        "pincode",
-        "latitude",
-        "longitude",
-        "age",
-        "housekeepingRole",
+        sp."serviceproviderid",
+        sp."firstName",
+        sp."lastName",
+        sp."gender",
+        sp."experience",
+        sp."rating",
+        sp."profilepic",
+        sp."mobileNo",
+        sp."emailId",
+        sp."diet",
+        sp."cookingSpeciality",
+        sp."languageknown",
+        sp."locality",
+        sp."location",
+        sp."pincode",
+        sp."latitude",
+        sp."longitude",
+        sp."dob",
+        sp."timeslot",
+        sp."housekeepingRole",
         (
           6371 * acos(
-            cos(radians($1)) * cos(radians("latitude")) *
-            cos(radians("longitude") - radians($2)) +
-            sin(radians($1)) * sin(radians("latitude"))
+            cos(radians($1)) * cos(radians(sp."latitude")) *
+            cos(radians(sp."longitude") - radians($2)) +
+            sin(radians($1)) * sin(radians(sp."latitude"))
           )
         ) AS distance_km
-      FROM "serviceprovider"
-      WHERE "isactive" = true
-        AND "housekeepingRole" = $3
+      FROM "serviceprovider" sp
+      WHERE sp."isactive" = true
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM serviceprovider_roles r
+            WHERE r.serviceproviderid = sp."serviceproviderid"
+              AND r.role = $3
+          )
+          OR (
+            NOT EXISTS (
+              SELECT 1
+              FROM serviceprovider_roles r2
+              WHERE r2.serviceproviderid = sp."serviceproviderid"
+            )
+            AND sp."housekeepingRole" = $3
+          )
+        )
         AND (
           6371 * acos(
-            cos(radians($1)) * cos(radians("latitude")) *
-            cos(radians("longitude") - radians($2)) +
-            sin(radians($1)) * sin(radians("latitude"))
+            cos(radians($1)) * cos(radians(sp."latitude")) *
+            cos(radians(sp."longitude") - radians($2)) +
+            sin(radians($1)) * sin(radians(sp."latitude"))
           )
         ) <= $4
       ORDER BY distance_km ASC
@@ -524,6 +700,68 @@ router.post("/nearby-monthly", async (req, res) => {
 
     const providerIds = providersRes.rows.map(p => p.serviceproviderid);
 
+    const rolesRes = await pool.query(
+      `
+      SELECT serviceproviderid, role
+      FROM serviceprovider_roles
+      WHERE serviceproviderid = ANY($1::bigint[])
+      ORDER BY role
+      `,
+      [providerIds]
+    );
+    const rolesBySpId = {};
+    for (const row of rolesRes.rows) {
+      const id = String(row.serviceproviderid);
+      rolesBySpId[id] ??= [];
+      rolesBySpId[id].push(row.role);
+    }
+
+    /* ---------- Previous bookings for this customer (optional) ---------- */
+    let previousBookingByProvider = new Map();
+    if (hasCustomerID) {
+      const prevRes = await pool.query(
+        `
+        SELECT DISTINCT ON (e."serviceproviderid")
+          e."engagement_id" AS "engagementId",
+          e."serviceproviderid" AS "serviceproviderid",
+          e."booking_type" AS "bookingType",
+          e."service_type" AS "serviceType",
+          e."start_date" AS "startDate",
+          e."end_date" AS "endDate",
+          e."engagement_status" AS "engagementStatus",
+          e."assignment_status" AS "assignmentStatus",
+          e."task_status" AS "taskStatus",
+          e."active" AS "active",
+          e."base_amount" AS "baseAmount",
+          e."created_at" AS "createdAt"
+        FROM engagements e
+        WHERE e."customerid" = $1
+          AND e."serviceproviderid" = ANY($2::bigint[])
+        ORDER BY
+          e."serviceproviderid",
+          e."end_date" DESC NULLS LAST,
+          e."created_at" DESC NULLS LAST
+        `,
+        [customerIdRaw, providerIds]
+      );
+      for (const row of prevRes.rows) {
+        const id = String(row.serviceproviderid);
+        previousBookingByProvider.set(id, {
+          engagementId: row.engagementId != null ? String(row.engagementId) : null,
+          bookingType: row.bookingType,
+          serviceType: row.serviceType,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          engagementStatus: row.engagementStatus,
+          assignmentStatus: row.assignmentStatus,
+          taskStatus: row.taskStatus,
+          active: row.active,
+          baseAmount: row.baseAmount != null ? Number(row.baseAmount) : null,
+          createdAt: row.createdAt
+        });
+      }
+    }
+
     /* ---------- STEP 2: Fetch Weekly Slots ---------- */
     const weeklySlotsRes = await pool.query(
       `
@@ -535,9 +773,37 @@ router.post("/nearby-monthly", async (req, res) => {
     );
 
     const weeklySlotsByProvider = {};
+    /** @type {Record<string, 'provider_weekly_slots' | 'timeslot' | 'none'>} */
+    const weeklySlotSourceByProvider = {};
     for (const row of weeklySlotsRes.rows) {
+      weeklySlotSourceByProvider[row.serviceproviderid] = "provider_weekly_slots";
       weeklySlotsByProvider[row.serviceproviderid] ??= [];
-      weeklySlotsByProvider[row.serviceproviderid].push(row);
+      weeklySlotsByProvider[row.serviceproviderid].push({
+        day_of_week: Number(row.day_of_week),
+        slot_start: normalizeTimeForEpoch(row.slot_start),
+        slot_end: normalizeTimeForEpoch(row.slot_end)
+      });
+    }
+
+    for (const p of providersRes.rows) {
+      const id = p.serviceproviderid;
+      const existing = weeklySlotsByProvider[id];
+      if (!existing || existing.length === 0) {
+        const derived = weeklySlotsFromTimeslotString(p.timeslot);
+        if (derived.length > 0) {
+          weeklySlotsByProvider[id] = derived;
+          weeklySlotSourceByProvider[id] = "timeslot";
+        }
+      }
+    }
+
+    for (const p of providersRes.rows) {
+      const id = p.serviceproviderid;
+      const slots = weeklySlotsByProvider[id];
+      if (!weeklySlotSourceByProvider[id]) {
+        weeklySlotSourceByProvider[id] =
+          slots && slots.length > 0 ? "provider_weekly_slots" : "none";
+      }
     }
 
     /* ---------- STEP 3: Fetch Bookings ---------- */
@@ -545,10 +811,12 @@ router.post("/nearby-monthly", async (req, res) => {
       `
       SELECT
         pa.serviceproviderid,
-        pa.date,
+        pa.date::text AS "dateStr",
         pa.slot_start_epoch,
-        pa.slot_end_epoch
+        pa.slot_end_epoch,
+        e.duration_minutes AS "engagementDurationMinutes"
       FROM provider_availability pa
+      LEFT JOIN engagements e ON e.engagement_id = pa.engagement_id
       WHERE
         pa.serviceproviderid = ANY($1)
         AND pa.status = 'BOOKED'
@@ -564,6 +832,7 @@ router.post("/nearby-monthly", async (req, res) => {
       `
       SELECT
         e.serviceproviderid,
+        e.booking_type,
         e.start_date,
         e.end_date,
         e.start_epoch,
@@ -572,27 +841,72 @@ router.post("/nearby-monthly", async (req, res) => {
       FROM engagements e
       WHERE
         e.serviceproviderid = ANY($1)
+        AND e.serviceproviderid IS NOT NULL
         AND e.active = true
         AND e.start_date <= $3::date
         AND e.end_date >= $2::date
-        AND e.booking_type IN ('MONTHLY', 'SHORT_TERM')
+        AND e.booking_type IN ('MONTHLY', 'SHORT_TERM', 'ON_DEMAND')
         AND (e.engagement_status = 'ASSIGNED' OR e.assignment_status = 'ASSIGNED')
       `,
       [providerIds, startDate, endDate]
     );
 
     const bookingsByProvider = {};
+    const paBookedCountBySp = {};
+    const providersWithPaBookedRows = new Set();
     for (const b of bookingsRes.rows) {
-      bookingsByProvider[b.serviceproviderid] ??= [];
-      bookingsByProvider[b.serviceproviderid].push({
-        slot_start_epoch: Number(b.slot_start_epoch),
-        slot_end_epoch: Number(b.slot_end_epoch)
-      });
+      const spid = b.serviceproviderid;
+      providersWithPaBookedRows.add(spid);
+      paBookedCountBySp[spid] = (paBookedCountBySp[spid] || 0) + 1;
+      const normalized = normalizeProviderAvailabilityBookedSlot(
+        b.dateStr,
+        b.slot_start_epoch,
+        b.slot_end_epoch,
+        b.engagementDurationMinutes != null
+          ? Number(b.engagementDurationMinutes)
+          : null
+      );
+      if (!normalized) continue;
+      bookingsByProvider[spid] ??= [];
+      bookingsByProvider[spid].push(normalized);
     }
 
+    const engMonthlyShortTermBySp = {};
+    const engOnDemandBySp = {};
+
     for (const e of engagementsRes.rows) {
-      const timeStr = dayjs.unix(Number(e.start_epoch)).tz("Asia/Kolkata").format("HH:mm");
-      const durationSec = (e.duration_minutes || 60) * 60;
+      const spid = e.serviceproviderid;
+
+      if (e.booking_type === "ON_DEMAND") {
+        engOnDemandBySp[spid] = (engOnDemandBySp[spid] || 0) + 1;
+        const ss = Number(e.start_epoch);
+        const ee = Number(e.end_epoch);
+        if (!Number.isNaN(ss) && !Number.isNaN(ee) && ee > ss) {
+          bookingsByProvider[spid] ??= [];
+          bookingsByProvider[spid].push({
+            slot_start_epoch: ss,
+            slot_end_epoch: ee
+          });
+        }
+        continue;
+      }
+
+      if (providersWithPaBookedRows.has(spid)) {
+        continue;
+      }
+
+      engMonthlyShortTermBySp[spid] = (engMonthlyShortTermBySp[spid] || 0) + 1;
+      const timeStr = dayjs
+        .unix(Number(e.start_epoch))
+        .tz("Asia/Kolkata")
+        .format("HH:mm");
+      const durMin =
+        e.duration_minutes != null &&
+        e.duration_minutes >= 1 &&
+        e.duration_minutes <= 24 * 60
+          ? e.duration_minutes
+          : 60;
+      const durationSec = durMin * 60;
       const engStart = new Date(e.start_date);
       const engEnd = new Date(e.end_date);
       const rangeStart = new Date(startDate);
@@ -605,8 +919,8 @@ router.post("/nearby-monthly", async (req, res) => {
         const slotStart = epochInIST(dateStr, timeStr);
         const slotEnd = slotStart + durationSec;
 
-        bookingsByProvider[e.serviceproviderid] ??= [];
-        bookingsByProvider[e.serviceproviderid].push({
+        bookingsByProvider[spid] ??= [];
+        bookingsByProvider[spid].push({
           slot_start_epoch: slotStart,
           slot_end_epoch: slotEnd
         });
@@ -655,7 +969,7 @@ router.post("/nearby-monthly", async (req, res) => {
 
         const preferredEpoch = epochInIST(dateStr, preferredStartTime);
 
-        console.log(`Evaluating Provider ${p.serviceproviderid} on ${dateStr} with preferred time ${preferredStartTime}`);
+        // console.log(`Evaluating Provider ${p.serviceproviderid} on ${dateStr} with preferred time ${preferredStartTime}`);
 
         /* ---------- 1️⃣ Check Working Hours ---------- */
         const isInsideWorkingSlot = todaysSlots.some(slot => {
@@ -689,10 +1003,6 @@ router.post("/nearby-monthly", async (req, res) => {
         );
 
 
-        console.log(`Provider ${p.serviceproviderid} on ${dateStr}: Preferred slot ${
-          preferredBlocked ? "BLOCKED" : "AVAILABLE"
-        }`
-        );
 
         if (!preferredBlocked) {
           daysAtPreferredTime++;
@@ -746,8 +1056,9 @@ router.post("/nearby-monthly", async (req, res) => {
           });
         }
       }
+      
 
-      evaluatedProviders.push({
+      const providerRow = {
         serviceproviderid: p.serviceproviderid,
         firstName: p.firstName,
         lastName: p.lastName,
@@ -762,8 +1073,14 @@ router.post("/nearby-monthly", async (req, res) => {
         pincode: p.pincode,
         latitude: p.latitude,
         longitude: p.longitude,
-        age: p.age,
+        age: p.dob != null ? getAge(p.dob) : null,
         housekeepingRole: p.housekeepingRole,
+        housekeepingRoles:
+          rolesBySpId[String(p.serviceproviderid)]?.length > 0
+            ? rolesBySpId[String(p.serviceproviderid)]
+            : p.housekeepingRole
+              ? [p.housekeepingRole]
+              : [],
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
         monthlyAvailability: {
@@ -777,9 +1094,32 @@ router.post("/nearby-monthly", async (req, res) => {
             unavailableDays
           },
           exceptions
+        },
+        availabilityFromDb: {
+          weeklySlotsSource:
+            weeklySlotSourceByProvider[p.serviceproviderid] || "none",
+          bookedRowsProviderAvailabilityInRange:
+            paBookedCountBySp[p.serviceproviderid] || 0,
+          engagementsMonthlyOrShortTermInRange:
+            engMonthlyShortTermBySp[p.serviceproviderid] || 0,
+          engagementsOnDemandInRange:
+            engOnDemandBySp[p.serviceproviderid] || 0,
+          mergedBookedIntervalsUsedForOverlapCheck: (
+            bookingsByProvider[p.serviceproviderid] || []
+          ).length
         }
-      });
+      };
+
+      if (hasCustomerID) {
+        const pid = String(p.serviceproviderid);
+        const prev = previousBookingByProvider.get(pid);
+        providerRow.previouslyBooked = !!prev;
+        providerRow.previousBookingDetails = prev ?? null;
+      }
+
+      evaluatedProviders.push(providerRow);
     }
+
 
     /* ---------- STEP 5: Group & Rank ---------- */
     const available = evaluatedProviders.filter(
@@ -797,6 +1137,25 @@ router.post("/nearby-monthly", async (req, res) => {
     }
 
     const ordered = [...available, ...notAvailable];
+
+    // When a customer is searching, prioritize providers they booked before.
+    // This ensures previouslyBooked providers are visible in the first page.
+    if (hasCustomerID) {
+      for (const p of ordered) p.bestMatch = false;
+      ordered.sort((a, b) => {
+        const ap = a.previouslyBooked ? 1 : 0;
+        const bp = b.previouslyBooked ? 1 : 0;
+        if (bp !== ap) return bp - ap;
+
+        const af = a.monthlyAvailability.fullyAvailable ? 1 : 0;
+        const bf = b.monthlyAvailability.fullyAvailable ? 1 : 0;
+        if (bf !== af) return bf - af;
+
+        return a.distance_km - b.distance_km;
+      });
+
+      if (ordered.length > 0) ordered[0].bestMatch = true;
+    }
 
     /* ---------- STEP 6: Pagination ---------- */
     const startIndex = (page - 1) * limit;
@@ -868,5 +1227,7 @@ router.post("/check-mobile", async (req, res) => {
 });
 
 router.get('/providers',getPaginatedProviders);
+router.get("/serviceprovider/:id", getProviderById);
 router.post('/serviceprovider/add', addProvider)
+router.put("/serviceprovider/:id", updateProvider);
 export default router;

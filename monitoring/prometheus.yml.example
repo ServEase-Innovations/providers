@@ -1,0 +1,17 @@
+# Copy to prometheus.yml and point targets at your running API.
+# The bundled Grafana dashboard filters metrics with job="providers-app" — keep that job name.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: providers-app
+    metrics_path: /metrics
+    static_configs:
+      # API on host machine (Prometheus in Docker on Mac/Windows)
+      - targets: ["host.docker.internal:4000"]
+        labels:
+          env: local
+      # If Prometheus runs on the same host as Node (no Docker), use instead:
+      # - targets: ["127.0.0.1:4000"]

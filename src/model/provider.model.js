@@ -10,6 +10,11 @@ const Provider = sequelize.define(
       autoIncrement: true,
       allowNull: false,
     },
+    vendorId: {
+  type: DataTypes.BIGINT,
+  allowNull: false,
+  field: "vendorid",
+},
 
     dob: {
       type: DataTypes.DATE,
@@ -44,6 +49,12 @@ const Provider = sequelize.define(
       field: "cookingSpeciality",
     },
 
+    vendorId: {
+  type: DataTypes.BIGINT,
+  allowNull: true, // ✅ important
+  field: "vendorid",
+},
+
     currentLocation: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -54,6 +65,36 @@ const Provider = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+
+    // Raw timeslot string, e.g. "06:00-20:00" (or "06:00-20:00,10:00-14:00")
+    // used in Swagger schemas and nearby search responses.
+    timeslot: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "timeslot",
+    },
+
+    // NOTE: DB column is "languageknown" (all lowercase),
+    // swagger/request uses "languageKnown" (camelCase).
+    // Sequelize will map this attribute to that column.
+    languageKnown: {
+  type: DataTypes.STRING,
+  field: "languageknown", // ✅ maps DB column
+  allowNull: true
+},
+
+kycType: {
+  type: DataTypes.STRING,
+  field: "kyctype"
+},
+kycNumber: {
+  type: DataTypes.STRING,
+  field: "kycnumber"
+},
+kycImage: {
+  type: DataTypes.TEXT,
+  field: "kycimage"
+},
 
     emailId: {
       type: DataTypes.STRING,
@@ -89,6 +130,13 @@ const Provider = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
       field: "housekeepingRole",
+    },
+
+    // Request/response: nannyCareType (codes as string[] or CSV). DB: comma-separated TEXT.
+    nannyCareType: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "nannycaretypes",
     },
 
     lastName: {
@@ -145,6 +193,14 @@ const Provider = sequelize.define(
       allowNull: false,
       defaultValue: 0,
       validate: { min: 0, max: 5 },
+    },
+
+    // Active flag used in raw SQL queries ("isactive" column)
+    isactive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: "isactive",
     },
 
     street: {

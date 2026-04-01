@@ -27,11 +27,11 @@ const Vendor = sequelize.define(
       defaultValue: DataTypes.NOW,
       field: "createddate",
     },
-    emailId: {
+    emailid: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
-      field: "emailId",
+      field: "emailid",
       validate: {
         isEmail: true,
       },

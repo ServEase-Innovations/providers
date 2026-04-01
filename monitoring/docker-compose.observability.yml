@@ -1,0 +1,31 @@
+# Optional local stack: Prometheus + Grafana
+#
+# 1. cp prometheus.yml.example prometheus.yml  (edit targets/port if needed)
+# 2. Start the Providers API (e.g. npm run dev on port 4000)
+# 3. docker compose -f monitoring/docker-compose.observability.yml up -d
+# 4. Prometheus UI: http://localhost:9090/targets — job "providers-app" should be UP
+# 5. Grafana: http://localhost:3000 — import grafana/dashboards/providers-api-dashboard.json
+#    Add Prometheus datasource URL http://prometheus:9090 and set its UID to "prometheus"
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: dark
+    depends_on:
+      - prometheus
