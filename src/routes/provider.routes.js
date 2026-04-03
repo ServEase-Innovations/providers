@@ -152,6 +152,12 @@ WHERE
  *       evaluates their availability across a date range (monthly search).
  *       Providers are NOT filtered out if unavailable on some days.
  *       Instead, conflicts and alternate times are returned per provider.
+ *       Role matching is case-insensitive on serviceprovider_roles and legacy housekeepingRole.
+ *       Booked slots and engagements are filtered by engagements.service_type matching the requested role
+ *       (NULL service_type still counts), so multi-role providers get availability for the searched role only.
+ *       When customerID is sent, providers you already booked still appear in the list.
+ *       Same role as search: EXISTING_CUSTOMER_BOOKING on overlapping days. Different service_type
+ *       (e.g. MAID booked, NANNY search): EXISTING_CUSTOMER_OTHER_SERVICE (fullyAvailable false).
  *
  *     tags:
  *       - Service Providers
@@ -280,8 +286,17 @@ WHERE
  *                                   example: "2025-12-29"
  *                                 reason:
  *                                   type: string
- *                                   enum: [BOOKED, ON_DEMAND, FULLY_BOOKED]
- *                                   example: BOOKED
+ *                                   description: >
+ *                                     EXISTING_CUSTOMER_BOOKING = same role as search.
+ *                                     EXISTING_CUSTOMER_OTHER_SERVICE = active engagement for another service_type with this provider on that day (e.g. MAID booked, NANNY search).
+ *                                   enum:
+ *                                     - NO_WEEKLY_SLOT_DEFINED
+ *                                     - OUTSIDE_WORKING_HOURS
+ *                                     - EXISTING_CUSTOMER_BOOKING
+ *                                     - EXISTING_CUSTOMER_OTHER_SERVICE
+ *                                     - BOOKED
+ *                                     - FULLY_BOOKED
+ *                                   example: EXISTING_CUSTOMER_OTHER_SERVICE
  *                                 suggestedTime:
  *                                   type: string
  *                                   nullable: true
@@ -464,6 +479,89 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 }
 
 /**
+ * Daily busy intervals from this customer's existing engagement with this provider,
+ * intersected with the search range. Ensures overlap checks match the booked wall-clock
+ * window when provider_availability rows use month-spanning epochs that normalize away
+ * from the preferred slot.
+ */
+function previousEngagementBusyIntervals(
+  prev,
+  rangeStartStr,
+  rangeEndStr,
+  roleNorm,
+  fallbackDurationSec
+) {
+  if (!prev || prev.active === false) return [];
+  const st = prev.serviceType != null ? String(prev.serviceType).trim().toLowerCase() : "";
+  if (!st || st !== String(roleNorm).trim().toLowerCase()) return [];
+
+  const startEp = Number(prev.startEpoch);
+  let timeStr;
+  if (Number.isFinite(startEp)) {
+    timeStr = dayjs.unix(startEp).tz("Asia/Kolkata").format("HH:mm");
+  } else if (prev.startDate != null) {
+    timeStr = dayjs(prev.startDate).tz("Asia/Kolkata").format("HH:mm");
+  } else {
+    return [];
+  }
+  let blockDurSec = fallbackDurationSec;
+  const dm = prev.durationMinutes;
+  if (dm != null && dm >= 1 && dm <= 24 * 60) {
+    blockDurSec = dm * 60;
+  }
+
+  const engStart = dayjs(prev.startDate).tz("Asia/Kolkata").startOf("day");
+  const engEnd = dayjs(prev.endDate).tz("Asia/Kolkata").startOf("day");
+  const reqStart = dayjs.tz(rangeStartStr, "YYYY-MM-DD", "Asia/Kolkata").startOf("day");
+  const reqEnd = dayjs.tz(rangeEndStr, "YYYY-MM-DD", "Asia/Kolkata").startOf("day");
+
+  if (engEnd.isBefore(reqStart, "day") || engStart.isAfter(reqEnd, "day")) {
+    return [];
+  }
+
+  const from = engStart.isAfter(reqStart) ? engStart : reqStart;
+  const to = engEnd.isBefore(reqEnd) ? engEnd : reqEnd;
+
+  const out = [];
+  let cursor = from.clone();
+  while (!cursor.isAfter(to, "day")) {
+    const dateStr = cursor.format("YYYY-MM-DD");
+    const blockStart = epochInIST(dateStr, timeStr);
+    const blockEnd = blockStart + blockDurSec;
+    out.push({
+      slot_start_epoch: blockStart,
+      slot_end_epoch: blockEnd,
+      _fromCustomerPriorEngagement: true,
+    });
+    cursor = cursor.add(1, "day");
+  }
+  return out;
+}
+
+function engagementOverlapsSearchWindow(prev, rangeStartStr, rangeEndStr) {
+  if (!prev || prev.active === false) return false;
+  const engStart = dayjs(prev.startDate).tz("Asia/Kolkata").startOf("day");
+  const engEnd = dayjs(prev.endDate).tz("Asia/Kolkata").startOf("day");
+  const reqStart = dayjs.tz(rangeStartStr, "YYYY-MM-DD", "Asia/Kolkata").startOf(
+    "day"
+  );
+  const reqEnd = dayjs.tz(rangeEndStr, "YYYY-MM-DD", "Asia/Kolkata").startOf(
+    "day"
+  );
+  return (
+    !engEnd.isBefore(reqStart, "day") && !engStart.isAfter(reqEnd, "day")
+  );
+}
+
+function calendarDayInPriorEngagement(prev, dateStr) {
+  if (!prev) return false;
+  const d = dayjs.tz(dateStr, "YYYY-MM-DD", "Asia/Kolkata").startOf("day");
+  const engStart = dayjs(prev.startDate).tz("Asia/Kolkata").startOf("day");
+  const engEnd = dayjs(prev.endDate).tz("Asia/Kolkata").startOf("day");
+  return !d.isBefore(engStart, "day") && !d.isAfter(engEnd, "day");
+}
+
+/**
  * Some monthly bookings store slot_start/slot_end as the full engagement range on every
  * provider_availability row. That makes any preferred time look blocked. Collapse to one
  * interval on the row's calendar date (IST) using wall-clock from start_epoch and a sane
@@ -625,6 +723,8 @@ router.post("/nearby-monthly", async (req, res) => {
       });
     }
 
+    const roleSearchNorm = String(role).trim();
+
     const customerIdInput = customerID ?? customerId;
     const customerIdRaw =
       customerIdInput != null && customerIdInput !== ""
@@ -671,7 +771,7 @@ router.post("/nearby-monthly", async (req, res) => {
             SELECT 1
             FROM serviceprovider_roles r
             WHERE r.serviceproviderid = sp."serviceproviderid"
-              AND r.role = $3
+              AND LOWER(TRIM(r.role::text)) = LOWER(TRIM($3::text))
           )
           OR (
             NOT EXISTS (
@@ -679,7 +779,16 @@ router.post("/nearby-monthly", async (req, res) => {
               FROM serviceprovider_roles r2
               WHERE r2.serviceproviderid = sp."serviceproviderid"
             )
-            AND sp."housekeepingRole" = $3
+            AND LOWER(TRIM(COALESCE(sp."housekeepingRole", ''::text))) = LOWER(TRIM($3::text))
+          )
+          OR (
+            LOWER(TRIM(COALESCE(sp."housekeepingRole", ''::text))) = LOWER(TRIM($3::text))
+            AND NOT EXISTS (
+              SELECT 1
+              FROM serviceprovider_roles r3
+              WHERE r3.serviceproviderid = sp."serviceproviderid"
+                AND LOWER(TRIM(r3.role::text)) = LOWER(TRIM($3::text))
+            )
           )
         )
         AND (
@@ -691,7 +800,7 @@ router.post("/nearby-monthly", async (req, res) => {
         ) <= $4
       ORDER BY distance_km ASC
       `,
-      [lat, lng, role, radius]
+      [lat, lng, roleSearchNorm, radius]
     );
 
     if (!providersRes.rows.length) {
@@ -713,7 +822,9 @@ router.post("/nearby-monthly", async (req, res) => {
     for (const row of rolesRes.rows) {
       const id = String(row.serviceproviderid);
       rolesBySpId[id] ??= [];
-      rolesBySpId[id].push(row.role);
+      if (row.role != null && String(row.role).trim() !== "") {
+        rolesBySpId[id].push(String(row.role).trim());
+      }
     }
 
     /* ---------- Previous bookings for this customer (optional) ---------- */
@@ -728,6 +839,8 @@ router.post("/nearby-monthly", async (req, res) => {
           e."service_type" AS "serviceType",
           e."start_date" AS "startDate",
           e."end_date" AS "endDate",
+          e."start_epoch" AS "startEpoch",
+          e."duration_minutes" AS "durationMinutes",
           e."engagement_status" AS "engagementStatus",
           e."assignment_status" AS "assignmentStatus",
           e."task_status" AS "taskStatus",
@@ -752,6 +865,9 @@ router.post("/nearby-monthly", async (req, res) => {
           serviceType: row.serviceType,
           startDate: row.startDate,
           endDate: row.endDate,
+          startEpoch: row.startEpoch != null ? Number(row.startEpoch) : null,
+          durationMinutes:
+            row.durationMinutes != null ? Number(row.durationMinutes) : null,
           engagementStatus: row.engagementStatus,
           assignmentStatus: row.assignmentStatus,
           taskStatus: row.taskStatus,
@@ -776,9 +892,10 @@ router.post("/nearby-monthly", async (req, res) => {
     /** @type {Record<string, 'provider_weekly_slots' | 'timeslot' | 'none'>} */
     const weeklySlotSourceByProvider = {};
     for (const row of weeklySlotsRes.rows) {
-      weeklySlotSourceByProvider[row.serviceproviderid] = "provider_weekly_slots";
-      weeklySlotsByProvider[row.serviceproviderid] ??= [];
-      weeklySlotsByProvider[row.serviceproviderid].push({
+      const sid = String(row.serviceproviderid);
+      weeklySlotSourceByProvider[sid] = "provider_weekly_slots";
+      weeklySlotsByProvider[sid] ??= [];
+      weeklySlotsByProvider[sid].push({
         day_of_week: Number(row.day_of_week),
         slot_start: normalizeTimeForEpoch(row.slot_start),
         slot_end: normalizeTimeForEpoch(row.slot_end)
@@ -786,7 +903,7 @@ router.post("/nearby-monthly", async (req, res) => {
     }
 
     for (const p of providersRes.rows) {
-      const id = p.serviceproviderid;
+      const id = String(p.serviceproviderid);
       const existing = weeklySlotsByProvider[id];
       if (!existing || existing.length === 0) {
         const derived = weeklySlotsFromTimeslotString(p.timeslot);
@@ -798,7 +915,7 @@ router.post("/nearby-monthly", async (req, res) => {
     }
 
     for (const p of providersRes.rows) {
-      const id = p.serviceproviderid;
+      const id = String(p.serviceproviderid);
       const slots = weeklySlotsByProvider[id];
       if (!weeklySlotSourceByProvider[id]) {
         weeklySlotSourceByProvider[id] =
@@ -823,8 +940,14 @@ router.post("/nearby-monthly", async (req, res) => {
         AND pa.date BETWEEN $2::date AND $3::date
         AND pa.slot_start_epoch IS NOT NULL
         AND pa.slot_end_epoch IS NOT NULL
+        AND (
+          pa.engagement_id IS NULL
+          OR e.engagement_id IS NULL
+          OR e.service_type IS NULL
+          OR LOWER(TRIM(e.service_type::text)) = LOWER(TRIM($4::text))
+        )
       `,
-      [providerIds, startDate, endDate]
+      [providerIds, startDate, endDate, roleSearchNorm]
     );
 
     /* ---------- Fallback: Engagements (in case provider_availability not populated) ---------- */
@@ -847,15 +970,19 @@ router.post("/nearby-monthly", async (req, res) => {
         AND e.end_date >= $2::date
         AND e.booking_type IN ('MONTHLY', 'SHORT_TERM', 'ON_DEMAND')
         AND (e.engagement_status = 'ASSIGNED' OR e.assignment_status = 'ASSIGNED')
+        AND (
+          e.service_type IS NULL
+          OR LOWER(TRIM(e.service_type::text)) = LOWER(TRIM($4::text))
+        )
       `,
-      [providerIds, startDate, endDate]
+      [providerIds, startDate, endDate, roleSearchNorm]
     );
 
     const bookingsByProvider = {};
     const paBookedCountBySp = {};
     const providersWithPaBookedRows = new Set();
     for (const b of bookingsRes.rows) {
-      const spid = b.serviceproviderid;
+      const spid = String(b.serviceproviderid);
       providersWithPaBookedRows.add(spid);
       paBookedCountBySp[spid] = (paBookedCountBySp[spid] || 0) + 1;
       const normalized = normalizeProviderAvailabilityBookedSlot(
@@ -875,7 +1002,7 @@ router.post("/nearby-monthly", async (req, res) => {
     const engOnDemandBySp = {};
 
     for (const e of engagementsRes.rows) {
-      const spid = e.serviceproviderid;
+      const spid = String(e.serviceproviderid);
 
       if (e.booking_type === "ON_DEMAND") {
         engOnDemandBySp[spid] = (engOnDemandBySp[spid] || 0) + 1;
@@ -932,7 +1059,21 @@ router.post("/nearby-monthly", async (req, res) => {
     const evaluatedProviders = [];
 
     for (const p of providersRes.rows) {
-      const providerWeeklySlots = weeklySlotsByProvider[p.serviceproviderid] || [];
+      const pidKey = String(p.serviceproviderid);
+      const providerWeeklySlots = weeklySlotsByProvider[pidKey] || [];
+
+      const baseBookings = bookingsByProvider[pidKey] || [];
+      const prevForSp = hasCustomerID
+        ? previousBookingByProvider.get(pidKey)
+        : null;
+      const fromPrevEngagement = previousEngagementBusyIntervals(
+        prevForSp,
+        startDate,
+        endDate,
+        roleSearchNorm,
+        durationSec
+      );
+      const providerBookingsMerged = [...baseBookings, ...fromPrevEngagement];
 
       let totalDays = 0;
       let daysAtPreferredTime = 0;
@@ -964,12 +1105,11 @@ router.post("/nearby-monthly", async (req, res) => {
           continue;
         }
 
-        const providerBookings =
-          bookingsByProvider[p.serviceproviderid] || [];
+        const providerBookings = providerBookingsMerged;
 
         const preferredEpoch = epochInIST(dateStr, preferredStartTime);
 
-        // console.log(`Evaluating Provider ${p.serviceproviderid} on ${dateStr} with preferred time ${preferredStartTime}`);
+        // console.log(`Evaluating Provider ${pidKey} on ${dateStr} with preferred time ${preferredStartTime}`);
 
         /* ---------- 1️⃣ Check Working Hours ---------- */
         const isInsideWorkingSlot = todaysSlots.some(slot => {
@@ -992,24 +1132,60 @@ router.post("/nearby-monthly", async (req, res) => {
           continue;
         }
 
+        /* Same customer + provider already engaged for another service in this period (e.g. MAID vs NANNY search) */
+        if (hasCustomerID && prevForSp && prevForSp.active !== false) {
+          const st =
+            prevForSp.serviceType != null
+              ? String(prevForSp.serviceType).trim().toLowerCase()
+              : "";
+          const roleL = String(roleSearchNorm).trim().toLowerCase();
+          if (
+            st &&
+            st !== roleL &&
+            engagementOverlapsSearchWindow(prevForSp, startDate, endDate) &&
+            calendarDayInPriorEngagement(prevForSp, dateStr)
+          ) {
+            daysWithDifferentTime++;
+            exceptions.push({
+              date: dateStr,
+              reason: "EXISTING_CUSTOMER_OTHER_SERVICE",
+              suggestedTime: null,
+            });
+            continue;
+          }
+        }
+
         /* ---------- 2️⃣ Check Booking Conflict ---------- */
-        const preferredBlocked = providerBookings.some(b =>
+        const prefEnd = preferredEpoch + durationSec;
+        const blockingPreferred = providerBookings.filter(b =>
           overlaps(
             preferredEpoch,
-            preferredEpoch + durationSec,
+            prefEnd,
             b.slot_start_epoch,
             b.slot_end_epoch
           )
         );
+        const blockedByCustomerPriorEngagement = blockingPreferred.some(
+          b => b._fromCustomerPriorEngagement
+        );
 
-
-
-        if (!preferredBlocked) {
+        if (blockingPreferred.length === 0) {
           daysAtPreferredTime++;
           continue;
         }
 
-        /* ---------- 3️⃣ Find Alternate Slot ---------- */
+        /* Customer already has this SP for this role on these dates — show in list, not fullyAvailable */
+        if (blockedByCustomerPriorEngagement) {
+          daysWithDifferentTime++;
+          exceptions.push({
+            date: dateStr,
+            reason: "EXISTING_CUSTOMER_BOOKING",
+            suggestedTime: null,
+          });
+          continue;
+        }
+
+        /* ---------- 3️⃣ Find Alternate Slot (other customers / generic BOOKED) ---------- */
         let alternate = null;
 
         for (const slot of todaysSlots) {
@@ -1075,12 +1251,21 @@ router.post("/nearby-monthly", async (req, res) => {
         longitude: p.longitude,
         age: p.dob != null ? getAge(p.dob) : null,
         housekeepingRole: p.housekeepingRole,
-        housekeepingRoles:
-          rolesBySpId[String(p.serviceproviderid)]?.length > 0
-            ? rolesBySpId[String(p.serviceproviderid)]
-            : p.housekeepingRole
-              ? [p.housekeepingRole]
-              : [],
+        housekeepingRoles: (() => {
+          const fromJunction = rolesBySpId[pidKey];
+          if (fromJunction?.length) {
+            const seen = new Set(
+              fromJunction.map((r) => String(r).trim().toLowerCase())
+            );
+            const out = [...fromJunction];
+            const leg = p.housekeepingRole != null ? String(p.housekeepingRole).trim() : "";
+            if (leg && !seen.has(leg.toLowerCase())) {
+              out.push(p.housekeepingRole);
+            }
+            return out;
+          }
+          return p.housekeepingRole ? [String(p.housekeepingRole).trim()] : [];
+        })(),
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
         monthlyAvailability: {
@@ -1097,24 +1282,31 @@ router.post("/nearby-monthly", async (req, res) => {
         },
         availabilityFromDb: {
           weeklySlotsSource:
-            weeklySlotSourceByProvider[p.serviceproviderid] || "none",
+            weeklySlotSourceByProvider[pidKey] || "none",
           bookedRowsProviderAvailabilityInRange:
-            paBookedCountBySp[p.serviceproviderid] || 0,
+            paBookedCountBySp[pidKey] || 0,
           engagementsMonthlyOrShortTermInRange:
-            engMonthlyShortTermBySp[p.serviceproviderid] || 0,
+            engMonthlyShortTermBySp[pidKey] || 0,
           engagementsOnDemandInRange:
-            engOnDemandBySp[p.serviceproviderid] || 0,
-          mergedBookedIntervalsUsedForOverlapCheck: (
-            bookingsByProvider[p.serviceproviderid] || []
-          ).length
+            engOnDemandBySp[pidKey] || 0,
+          mergedBookedIntervalsUsedForOverlapCheck: providerBookingsMerged.length
         }
       };
 
       if (hasCustomerID) {
-        const pid = String(p.serviceproviderid);
+        const pid = pidKey;
         const prev = previousBookingByProvider.get(pid);
         providerRow.previouslyBooked = !!prev;
-        providerRow.previousBookingDetails = prev ?? null;
+        if (prev) {
+          const {
+            startEpoch: _se,
+            durationMinutes: _dm,
+            ...prevForApi
+          } = prev;
+          providerRow.previousBookingDetails = prevForApi;
+        } else {
+          providerRow.previousBookingDetails = null;
+        }
       }
 
       evaluatedProviders.push(providerRow);
