@@ -162,6 +162,25 @@ WHERE
  *     tags:
  *       - Service Providers
  *
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: 1-based page index. Overrides request body `page` when this query param is sent.
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 200
+ *           default: 10
+ *         description: Page size (capped at 200). Overrides request body `limit` when this query param is sent.
+ *
  *     requestBody:
  *       required: true
  *       content:
@@ -212,6 +231,17 @@ WHERE
  *               customerID:
  *                 type: integer
  *                 description: Optional. Searching customer (maps to engagements.customerid). When set, each provider includes previouslyBooked and previousBookingDetails.
+ *               page:
+ *                 type: integer
+ *                 minimum: 1
+ *                 default: 1
+ *                 description: 1-based page (optional if using query ?page=)
+ *               limit:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 200
+ *                 default: 10
+ *                 description: Page size, max 200 (optional if using query ?limit=)
  *
  *     responses:
  *       200:
@@ -224,6 +254,12 @@ WHERE
  *                 count:
  *                   type: integer
  *                   example: 4
+ *                 page:
+ *                   type: integer
+ *                   example: 1
+ *                 limit:
+ *                   type: integer
+ *                   example: 10
  *                 providers:
  *                   type: array
  *                   items:
@@ -655,6 +691,32 @@ function isValidTimeHHmm(timeStr) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr);
 }
 
+/** Max rows per page for /nearby-monthly (query or body `limit`). */
+const NEARBY_MONTHLY_PAGE_LIMIT_MAX = 200;
+
+/**
+ * `page` / `limit` from query string override the same keys in the JSON body when present.
+ */
+function parseNearbyMonthlyPagination(query, body) {
+  const q = query || {};
+  const b = body || {};
+  const hasQueryPage =
+    q.page != null && String(q.page).trim() !== "";
+  const hasQueryLimit =
+    q.limit != null && String(q.limit).trim() !== "";
+  const rawPage = hasQueryPage ? q.page : b.page;
+  const rawLimit = hasQueryLimit ? q.limit : b.limit;
+
+  let page = Number(rawPage);
+  if (!Number.isFinite(page) || page < 1) page = 1;
+  page = Math.floor(page);
+
+  let limit = Number(rawLimit);
+  if (!Number.isFinite(limit) || limit < 1) limit = 10;
+  limit = Math.min(NEARBY_MONTHLY_PAGE_LIMIT_MAX, Math.floor(limit));
+
+  return { page, limit };
+}
 
 const getAge = (dobString) =>{
       const today = new Date();
@@ -687,11 +749,11 @@ router.post("/nearby-monthly", async (req, res) => {
       endDate,
       preferredStartTime,
       serviceDurationMinutes,
-      page = 1,
-      limit = 10,
       customerID,
       customerId
     } = req.body;
+
+    const { page, limit } = parseNearbyMonthlyPagination(req.query, req.body);
 
     if (
       !lat ||
