@@ -218,6 +218,41 @@ kycImage: {
       type: DataTypes.BIGINT,
       allowNull: true,
     },
+    bankName: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  field: "bankname",
+},
+
+ifscCode: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  field: "ifsccode",
+},
+
+accountHolderName: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  field: "accountholdername",
+},
+
+accountNumber: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  field: "accountnumber",
+},
+
+accountType: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  field: "accounttype",
+},
+
+upiId: {
+  type: DataTypes.STRING,
+  allowNull: true,
+  field: "upiid",
+},
 
     permanent_address_id: {
       type: DataTypes.BIGINT,
