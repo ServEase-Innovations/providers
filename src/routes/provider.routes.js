@@ -794,10 +794,43 @@ router.post("/nearby-monthly", async (req, res) => {
         : null;
     const hasCustomerID =
       customerIdRaw != null && !Number.isNaN(customerIdRaw);
+     /* ---------- STEP 1: Nearby Providers WITH OR FILTER ---------- */
 
+const {
+  experienceRange,
+  minRating,
+  gender,
+  diet,
+  languages
+} = req.body;
+
+// /* 👉 Dynamic OR filter block */
+const filterQuery = `
+AND (
+  (
+    $5::text IS NOT NULL 
+    AND sp."experience" BETWEEN 
+      split_part($5::text, '-', 1)::int 
+      AND 
+      split_part($5::text, '-', 2)::int
+  )
+  OR ($6::numeric IS NOT NULL AND sp."rating" >= $6::numeric)
+  OR ($7::text IS NOT NULL AND LOWER(sp."gender") = LOWER($7::text))
+  OR ($8::text IS NOT NULL AND LOWER(sp."diet") = LOWER($8::text))
+  OR (
+    $9::text[] IS NOT NULL AND EXISTS (
+      SELECT 1
+      FROM unnest($9::text[]) AS lang
+      WHERE LOWER(COALESCE(sp."languageknown", '')) LIKE '%' || LOWER(lang) || '%'
+    )
+  )
+  OR ($5 IS NULL AND $6 IS NULL AND $7 IS NULL AND $8 IS NULL AND $9 IS NULL)
+)
+`;
     /* ---------- STEP 1: Nearby Providers ---------- */
     const providersRes = await pool.query(
       `
+
       SELECT
         sp."serviceproviderid",
         sp."firstName",
@@ -860,9 +893,23 @@ router.post("/nearby-monthly", async (req, res) => {
             sin(radians($1)) * sin(radians(sp."latitude"))
           )
         ) <= $4
+
+        ${filterQuery}
+          
       ORDER BY distance_km ASC
       `,
-      [lat, lng, roleSearchNorm, radius]
+      // [lat, lng, roleSearchNorm, radius]
+[
+  lat,                     // $1
+  lng,                     // $2
+  roleSearchNorm,          // $3
+  radius,                  // $4
+  experienceRange ?? null,   // $5
+  minRating ?? null,       // $6
+  gender ?? null,          // $7
+  diet ?? null,            // $8
+  (languages?.length ? languages : null) // $9
+]
     );
 
     if (!providersRes.rows.length) {
