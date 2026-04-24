@@ -1012,6 +1012,7 @@ router.post("/nearby-monthly", async (req, res) => {
       `
       SELECT
         e.serviceproviderid,
+        e.engagement_id AS "engagementId",
         e.booking_type,
         e.start_date,
         e.end_date,
@@ -1123,10 +1124,25 @@ router.post("/nearby-monthly", async (req, res) => {
         const slotEnd = slotStart + durationSec;
 
         bookingsByProvider[spid] ??= [];
-        bookingsByProvider[spid].push({
+        const mergedSlot = {
           slot_start_epoch: slotStart,
           slot_end_epoch: slotEnd
-        });
+        };
+        if (hasCustomerID) {
+          const prevRow = previousBookingByProvider.get(spid);
+          const ownEngId =
+            prevRow?.engagementId != null
+              ? String(prevRow.engagementId)
+              : null;
+          if (
+            ownEngId != null &&
+            e.engagementId != null &&
+            String(e.engagementId) === ownEngId
+          ) {
+            mergedSlot._customerOwnEngagementFallback = true;
+          }
+        }
+        bookingsByProvider[spid].push(mergedSlot);
         cursor = cursor.add(1, "day");
       }
     }
@@ -1253,7 +1269,11 @@ router.post("/nearby-monthly", async (req, res) => {
 
         /* Only this customer's current engagement (synthetic + matching PA) — same wall slot as requested */
         const ownBookingBlock = b =>
-          Boolean(b._fromCustomerPriorEngagement || b._customerOwnPa);
+          Boolean(
+            b._fromCustomerPriorEngagement ||
+            b._customerOwnPa ||
+            b._customerOwnEngagementFallback
+          );
         const ownInPreferred = blockingPreferred.filter(ownBookingBlock);
         const foreignInPreferred = blockingPreferred.filter(
           b => !ownBookingBlock(b)
