@@ -993,6 +993,7 @@ router.post("/nearby-monthly", async (req, res) => {
         pa.date::text AS "dateStr",
         pa.slot_start_epoch,
         pa.slot_end_epoch,
+        pa.engagement_id AS "engagementId",
         e.duration_minutes AS "engagementDurationMinutes"
       FROM provider_availability pa
       LEFT JOIN engagements e ON e.engagement_id = pa.engagement_id
@@ -1050,6 +1051,20 @@ router.post("/nearby-monthly", async (req, res) => {
           : null
       );
       if (!normalized) continue;
+      if (hasCustomerID) {
+        const prevRow = previousBookingByProvider.get(spid);
+        const ownEngId =
+          prevRow?.engagementId != null
+            ? String(prevRow.engagementId)
+            : null;
+        if (
+          ownEngId != null &&
+          b.engagementId != null &&
+          String(b.engagementId) === ownEngId
+        ) {
+          normalized._customerOwnPa = true;
+        }
+      }
       bookingsByProvider[spid] ??= [];
       bookingsByProvider[spid].push(normalized);
     }
@@ -1232,6 +1247,25 @@ router.post("/nearby-monthly", async (req, res) => {
         );
 
         if (blockingPreferred.length === 0) {
+          daysAtPreferredTime++;
+          continue;
+        }
+
+        /* Only this customer's current engagement (synthetic + matching PA) — same wall slot as requested */
+        const ownBookingBlock = b =>
+          Boolean(b._fromCustomerPriorEngagement || b._customerOwnPa);
+        const ownInPreferred = blockingPreferred.filter(ownBookingBlock);
+        const foreignInPreferred = blockingPreferred.filter(
+          b => !ownBookingBlock(b)
+        );
+        if (
+          foreignInPreferred.length === 0 &&
+          ownInPreferred.some(
+            p =>
+              preferredEpoch >= p.slot_start_epoch &&
+              prefEnd <= p.slot_end_epoch
+          )
+        ) {
           daysAtPreferredTime++;
           continue;
         }
