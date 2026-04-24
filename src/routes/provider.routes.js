@@ -1002,14 +1002,8 @@ router.post("/nearby-monthly", async (req, res) => {
         AND pa.date BETWEEN $2::date AND $3::date
         AND pa.slot_start_epoch IS NOT NULL
         AND pa.slot_end_epoch IS NOT NULL
-        AND (
-          pa.engagement_id IS NULL
-          OR e.engagement_id IS NULL
-          OR e.service_type IS NULL
-          OR LOWER(TRIM(e.service_type::text)) = LOWER(TRIM($4::text))
-        )
       `,
-      [providerIds, startDate, endDate, roleSearchNorm]
+      [providerIds, startDate, endDate]
     );
 
     /* ---------- Fallback: Engagements (in case provider_availability not populated) ---------- */
@@ -1096,15 +1090,20 @@ router.post("/nearby-monthly", async (req, res) => {
           ? e.duration_minutes
           : 60;
       const durationSec = durMin * 60;
-      const engStart = new Date(e.start_date);
-      const engEnd = new Date(e.end_date);
-      const rangeStart = new Date(startDate);
-      const rangeEnd = new Date(endDate);
-      const fromDate = engStart > rangeStart ? engStart : rangeStart;
-      const toDate = engEnd < rangeEnd ? engEnd : rangeEnd;
+      const engStart = dayjs(e.start_date).tz("Asia/Kolkata").startOf("day");
+      const engEnd = dayjs(e.end_date).tz("Asia/Kolkata").startOf("day");
+      const rangeStart = dayjs
+        .tz(startDate, "YYYY-MM-DD", "Asia/Kolkata")
+        .startOf("day");
+      const rangeEnd = dayjs
+        .tz(endDate, "YYYY-MM-DD", "Asia/Kolkata")
+        .startOf("day");
+      const fromDay = engStart.isAfter(rangeStart) ? engStart : rangeStart;
+      const toDay = engEnd.isBefore(rangeEnd) ? engEnd : rangeEnd;
 
-      for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().slice(0, 10);
+      let cursor = fromDay.clone();
+      while (!cursor.isAfter(toDay, "day")) {
+        const dateStr = cursor.format("YYYY-MM-DD");
         const slotStart = epochInIST(dateStr, timeStr);
         const slotEnd = slotStart + durationSec;
 
@@ -1113,6 +1112,7 @@ router.post("/nearby-monthly", async (req, res) => {
           slot_start_epoch: slotStart,
           slot_end_epoch: slotEnd
         });
+        cursor = cursor.add(1, "day");
       }
     }
 
