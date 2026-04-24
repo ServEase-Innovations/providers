@@ -1040,6 +1040,7 @@ AND (
         pa.date::text AS "dateStr",
         pa.slot_start_epoch,
         pa.slot_end_epoch,
+        pa.engagement_id AS "engagementId",
         e.duration_minutes AS "engagementDurationMinutes"
       FROM provider_availability pa
       LEFT JOIN engagements e ON e.engagement_id = pa.engagement_id
@@ -1049,14 +1050,8 @@ AND (
         AND pa.date BETWEEN $2::date AND $3::date
         AND pa.slot_start_epoch IS NOT NULL
         AND pa.slot_end_epoch IS NOT NULL
-        AND (
-          pa.engagement_id IS NULL
-          OR e.engagement_id IS NULL
-          OR e.service_type IS NULL
-          OR LOWER(TRIM(e.service_type::text)) = LOWER(TRIM($4::text))
-        )
       `,
-      [providerIds, startDate, endDate, roleSearchNorm]
+      [providerIds, startDate, endDate]
     );
 
     /* ---------- Fallback: Engagements (in case provider_availability not populated) ---------- */
@@ -1103,6 +1098,20 @@ AND (
           : null
       );
       if (!normalized) continue;
+      if (hasCustomerID) {
+        const prevRow = previousBookingByProvider.get(spid);
+        const ownEngId =
+          prevRow?.engagementId != null
+            ? String(prevRow.engagementId)
+            : null;
+        if (
+          ownEngId != null &&
+          b.engagementId != null &&
+          String(b.engagementId) === ownEngId
+        ) {
+          normalized._customerOwnPa = true;
+        }
+      }
       bookingsByProvider[spid] ??= [];
       bookingsByProvider[spid].push(normalized);
     }
@@ -1143,15 +1152,20 @@ AND (
           ? e.duration_minutes
           : 60;
       const durationSec = durMin * 60;
-      const engStart = new Date(e.start_date);
-      const engEnd = new Date(e.end_date);
-      const rangeStart = new Date(startDate);
-      const rangeEnd = new Date(endDate);
-      const fromDate = engStart > rangeStart ? engStart : rangeStart;
-      const toDate = engEnd < rangeEnd ? engEnd : rangeEnd;
+      const engStart = dayjs(e.start_date).tz("Asia/Kolkata").startOf("day");
+      const engEnd = dayjs(e.end_date).tz("Asia/Kolkata").startOf("day");
+      const rangeStart = dayjs
+        .tz(startDate, "YYYY-MM-DD", "Asia/Kolkata")
+        .startOf("day");
+      const rangeEnd = dayjs
+        .tz(endDate, "YYYY-MM-DD", "Asia/Kolkata")
+        .startOf("day");
+      const fromDay = engStart.isAfter(rangeStart) ? engStart : rangeStart;
+      const toDay = engEnd.isBefore(rangeEnd) ? engEnd : rangeEnd;
 
-      for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().slice(0, 10);
+      let cursor = fromDay.clone();
+      while (!cursor.isAfter(toDay, "day")) {
+        const dateStr = cursor.format("YYYY-MM-DD");
         const slotStart = epochInIST(dateStr, timeStr);
         const slotEnd = slotStart + durationSec;
 
@@ -1160,6 +1174,7 @@ AND (
           slot_start_epoch: slotStart,
           slot_end_epoch: slotEnd
         });
+        cursor = cursor.add(1, "day");
       }
     }
 
@@ -1279,6 +1294,25 @@ AND (
         );
 
         if (blockingPreferred.length === 0) {
+          daysAtPreferredTime++;
+          continue;
+        }
+
+        /* Only this customer's current engagement (synthetic + matching PA) — same wall slot as requested */
+        const ownBookingBlock = b =>
+          Boolean(b._fromCustomerPriorEngagement || b._customerOwnPa);
+        const ownInPreferred = blockingPreferred.filter(ownBookingBlock);
+        const foreignInPreferred = blockingPreferred.filter(
+          b => !ownBookingBlock(b)
+        );
+        if (
+          foreignInPreferred.length === 0 &&
+          ownInPreferred.some(
+            p =>
+              preferredEpoch >= p.slot_start_epoch &&
+              prefEnd <= p.slot_end_epoch
+          )
+        ) {
           daysAtPreferredTime++;
           continue;
         }
