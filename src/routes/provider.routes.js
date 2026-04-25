@@ -514,6 +514,24 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && aEnd > bStart;
 }
 
+function calendarYmdKolkata(value) {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    const s = value.trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  }
+  return dayjs(value).tz("Asia/Kolkata").format("YYYY-MM-DD");
+}
+
+function isDateInEngagementVacation(dateYmd, vacationStart, vacationEnd) {
+  if (vacationStart == null || vacationEnd == null) return false;
+  const d = calendarYmdKolkata(dateYmd);
+  const a = calendarYmdKolkata(vacationStart);
+  const b = calendarYmdKolkata(vacationEnd);
+  if (!d || !a || !b) return false;
+  return d >= a && d <= b;
+}
+
 /**
  * Daily busy intervals from this customer's existing engagement with this provider,
  * intersected with the search range. Ensures overlap checks match the booked wall-clock
@@ -562,6 +580,16 @@ function previousEngagementBusyIntervals(
   let cursor = from.clone();
   while (!cursor.isAfter(to, "day")) {
     const dateStr = cursor.format("YYYY-MM-DD");
+    if (
+      isDateInEngagementVacation(
+        dateStr,
+        prev.vacationStartDate,
+        prev.vacationEndDate
+      )
+    ) {
+      cursor = cursor.add(1, "day");
+      continue;
+    }
     const blockStart = epochInIST(dateStr, timeStr);
     const blockEnd = blockStart + blockDurSec;
     out.push({
@@ -740,6 +768,8 @@ const getAge = (dobString) =>{
 
 router.post("/nearby-monthly", async (req, res) => {
   try {
+    const b = req.body || {};
+    const q = req.query || {};
     const {
       lat,
       lng,
@@ -748,12 +778,12 @@ router.post("/nearby-monthly", async (req, res) => {
       startDate,
       endDate,
       preferredStartTime,
-      serviceDurationMinutes,
-      customerID,
-      customerId
-    } = req.body;
+      serviceDurationMinutes
+    } = b;
+    const customerID = b.customerID ?? q.customerID;
+    const customerId = b.customerId ?? q.customerId;
 
-    const { page, limit } = parseNearbyMonthlyPagination(req.query, req.body);
+    const { page, limit } = parseNearbyMonthlyPagination(q, b);
 
     if (
       !lat ||
@@ -950,6 +980,8 @@ AND (
           e."end_date" AS "endDate",
           e."start_epoch" AS "startEpoch",
           e."duration_minutes" AS "durationMinutes",
+          e."vacation_start_date" AS "vacationStartDate",
+          e."vacation_end_date" AS "vacationEndDate",
           e."engagement_status" AS "engagementStatus",
           e."assignment_status" AS "assignmentStatus",
           e."task_status" AS "taskStatus",
@@ -977,6 +1009,8 @@ AND (
           startEpoch: row.startEpoch != null ? Number(row.startEpoch) : null,
           durationMinutes:
             row.durationMinutes != null ? Number(row.durationMinutes) : null,
+          vacationStartDate: row.vacationStartDate,
+          vacationEndDate: row.vacationEndDate,
           engagementStatus: row.engagementStatus,
           assignmentStatus: row.assignmentStatus,
           taskStatus: row.taskStatus,
@@ -1054,6 +1088,22 @@ AND (
       [providerIds, startDate, endDate]
     );
 
+    const paFreeRes = await pool.query(
+      `
+      SELECT
+        pa.serviceproviderid,
+        pa.engagement_id,
+        pa.date::text AS "dateStr"
+      FROM provider_availability pa
+      WHERE
+        pa.serviceproviderid = ANY($1)
+        AND LOWER(TRIM(COALESCE(pa.status::text, ''))) = 'free'
+        AND pa.date BETWEEN $2::date AND $3::date
+        AND pa.engagement_id IS NOT NULL
+      `,
+      [providerIds, startDate, endDate]
+    );
+
     /* ---------- Fallback: Engagements (in case provider_availability not populated) ---------- */
     const engagementsRes = await pool.query(
       `
@@ -1065,7 +1115,9 @@ AND (
         e.end_date,
         e.start_epoch,
         e.end_epoch,
-        e.duration_minutes
+        e.duration_minutes,
+        e.vacation_start_date,
+        e.vacation_end_date
       FROM engagements e
       WHERE
         e.serviceproviderid = ANY($1)
@@ -1082,6 +1134,49 @@ AND (
       `,
       [providerIds, startDate, endDate, roleSearchNorm]
     );
+
+    const paFreeBySpAndCalendarDate = new Set();
+    for (const f of paFreeRes.rows) {
+      const d = f.dateStr.trim().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      paFreeBySpAndCalendarDate.add(`${String(f.serviceproviderid)}:${d}`);
+    }
+    const engagementVacationBySpAndDate = new Set();
+    {
+      const r0 = dayjs
+        .tz(calendarYmdKolkata(startDate), "YYYY-MM-DD", "Asia/Kolkata")
+        .startOf("day");
+      const r1 = dayjs
+        .tz(calendarYmdKolkata(endDate), "YYYY-MM-DD", "Asia/Kolkata")
+        .startOf("day");
+      for (const e0 of engagementsRes.rows) {
+        if (e0.booking_type === "ON_DEMAND") continue;
+        const sp0 = String(e0.serviceproviderid);
+        for (
+          let c = r0.clone();
+          !c.isAfter(r1, "day");
+          c = c.add(1, "day")
+        ) {
+          const ds = c.format("YYYY-MM-DD");
+          if (
+            isDateInEngagementVacation(
+              ds,
+              e0.vacation_start_date,
+              e0.vacation_end_date
+            )
+          ) {
+            engagementVacationBySpAndDate.add(`${sp0}:${ds}`);
+          }
+        }
+      }
+    }
+    const spDayClearedForVisit = new Set();
+    for (const k of paFreeBySpAndCalendarDate) {
+      spDayClearedForVisit.add(k);
+    }
+    for (const k of engagementVacationBySpAndDate) {
+      spDayClearedForVisit.add(k);
+    }
 
     const bookingsByProvider = {};
     const paBookedCountBySp = {};
@@ -1167,6 +1262,16 @@ AND (
       let cursor = fromDay.clone();
       while (!cursor.isAfter(toDay, "day")) {
         const dateStr = cursor.format("YYYY-MM-DD");
+        if (
+          isDateInEngagementVacation(
+            dateStr,
+            e.vacation_start_date,
+            e.vacation_end_date
+          )
+        ) {
+          cursor = cursor.add(1, "day");
+          continue;
+        }
         const slotStart = epochInIST(dateStr, timeStr);
         const slotEnd = slotStart + durationSec;
 
@@ -1213,7 +1318,15 @@ AND (
         roleSearchNorm,
         durationSec
       );
-      const providerBookingsMerged = [...baseBookings, ...fromPrevEngagement];
+      let providerBookingsMerged = [...baseBookings, ...fromPrevEngagement];
+      if (spDayClearedForVisit.size) {
+        providerBookingsMerged = providerBookingsMerged.filter((b) => {
+          const t = Number(b.slot_start_epoch);
+          if (!Number.isFinite(t)) return true;
+          const dKey = dayjs.unix(t).tz("Asia/Kolkata").format("YYYY-MM-DD");
+          return !spDayClearedForVisit.has(`${pidKey}:${dKey}`);
+        });
+      }
 
       let totalDays = 0;
       let daysAtPreferredTime = 0;
@@ -1221,15 +1334,22 @@ AND (
       let unavailableDays = 0;
       const exceptions = [];
 
+      const rangeEvalStart = dayjs
+        .tz(calendarYmdKolkata(startDate), "YYYY-MM-DD", "Asia/Kolkata")
+        .startOf("day");
+      const rangeEvalEnd = dayjs
+        .tz(calendarYmdKolkata(endDate), "YYYY-MM-DD", "Asia/Kolkata")
+        .startOf("day");
+
       for (
-        let d = new Date(startDate);
-        d <= new Date(endDate);
-        d.setDate(d.getDate() + 1)
+        let evDay = rangeEvalStart.clone();
+        !evDay.isAfter(rangeEvalEnd, "day");
+        evDay = evDay.add(1, "day")
       ) {
         totalDays++;
 
-        const dateStr = d.toISOString().slice(0, 10);
-        const dow = d.getDay();
+        const dateStr = evDay.format("YYYY-MM-DD");
+        const dow = evDay.day();
 
         const todaysSlots = providerWeeklySlots.filter(
           s => s.day_of_week === dow
@@ -1245,11 +1365,29 @@ AND (
           continue;
         }
 
+        if (spDayClearedForVisit.has(`${pidKey}:${dateStr}`)) {
+          const pe = epochInIST(dateStr, preferredStartTime);
+          const insideCleared = todaysSlots.some((slot) => {
+            const a = epochInIST(dateStr, slot.slot_start);
+            const b = epochInIST(dateStr, slot.slot_end);
+            return pe >= a && pe + durationSec <= b;
+          });
+          if (insideCleared) {
+            daysAtPreferredTime++;
+          } else {
+            daysWithDifferentTime++;
+            exceptions.push({
+              date: dateStr,
+              reason: "OUTSIDE_WORKING_HOURS",
+              suggestedTime: todaysSlots[0].slot_start
+            });
+          }
+          continue;
+        }
+
         const providerBookings = providerBookingsMerged;
 
         const preferredEpoch = epochInIST(dateStr, preferredStartTime);
-
-        // console.log(`Evaluating Provider ${pidKey} on ${dateStr} with preferred time ${preferredStartTime}`);
 
         /* ---------- 1️⃣ Check Working Hours ---------- */
         const isInsideWorkingSlot = todaysSlots.some(slot => {
@@ -1453,7 +1591,9 @@ AND (
           engagementsOnDemandInRange:
             engOnDemandBySp[pidKey] || 0,
           mergedBookedIntervalsUsedForOverlapCheck: providerBookingsMerged.length
-        }
+        },
+        previouslyBooked: false,
+        previousBookingDetails: null
       };
 
       if (hasCustomerID) {
@@ -1467,8 +1607,6 @@ AND (
             ...prevForApi
           } = prev;
           providerRow.previousBookingDetails = prevForApi;
-        } else {
-          providerRow.previousBookingDetails = null;
         }
       }
 
