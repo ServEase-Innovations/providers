@@ -1,0 +1,61 @@
+# Full stack: Prometheus + Grafana + Loki + Promtail for Providers API on the host.
+# Host ports 9205 / 3205 / 3125 (avoids clashing with the slim stack on 9090/3000).
+#
+# 1. npm run dev (API on port 4000)
+# 2. docker compose -f docker-compose.observability-full.yml up -d
+# 3. Prometheus: http://localhost:9205/targets
+# 4. Grafana:    http://localhost:3205 (admin/admin) — dashboard auto-loaded
+# 5. Logs: Grafana → Explore → Loki → {job="providers-app"}
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: providers-prometheus-full
+    ports:
+      - "9205:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.host.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: providers-loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3125:3100"
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: providers-promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./monitoring/promtail/config.yml:/etc/promtail/config.yml:ro
+      - ./logs:/var/log/providers:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: providers-grafana-full
+    ports:
+      - "3205:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: dark
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped

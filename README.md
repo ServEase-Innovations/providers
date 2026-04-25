@@ -235,6 +235,25 @@ docker compose -f docker-compose.observability.yml up -d
 
 If your Prometheus job name is not `providers-app`, either change `job_name` in `prometheus.yml` or replace `job="providers-app"` in the dashboard JSON / panel queries.
 
+### Loki, Promtail, and JSON logs (full stack)
+
+`src/utils/logger.js` writes structured JSON lines to **`logs/app.log`**. To run **Prometheus + Grafana + Loki + Promtail** together (with Grafana provisioning that includes **Prometheus** and **Loki** datasources and the existing dashboard), use the **full** compose file from the repo root:
+
+```bash
+npm run monitoring:up:full
+# or: docker compose -f docker-compose.observability-full.yml up -d
+```
+
+| UI | URL (full stack) |
+|----|------------------|
+| Grafana | http://localhost:3205 (admin / admin) |
+| Prometheus | http://localhost:9205 |
+| Loki | http://localhost:3125 |
+
+Run the API on **port 4000** first. In Grafana **Explore → Loki**, try `{job="providers-app"}`. Stop: `npm run monitoring:down:full`.
+
+The slimmer **`monitoring/docker-compose.observability.yml`** stack (Prometheus + Grafana only on **9090** / **3000**) is unchanged: `npm run monitoring:up`.
+
 ---
 
 ## Project layout
@@ -253,10 +272,14 @@ src/
   utils/                 # pagination, response helper, logger
   monitoring/prometheus.js
 monitoring/
-  prometheus.yml.example          # Scrape config template (job: providers-app)
-  docker-compose.observability.yml # Optional local Prometheus + Grafana
+  prometheus.yml.example           # Scrape template (job: providers-app)
+  prometheus/prometheus.host.yml   # Host scrape for full observability compose
+  promtail/config.yml              # Ship logs/app.log → Loki
+  docker-compose.observability.yml # Prometheus + Grafana (9090 / 3000)
+  grafana/provisioning/datasources # Prometheus + Loki (for full stack)
   grafana/dashboards/
-    providers-api-dashboard.json  # Import into Grafana
+    providers-api-dashboard.json
+docker-compose.observability-full.yml  # Prometheus + Grafana + Loki + Promtail (9205 / 3205 / 3125)
 sql/                     # DBA-run migrations / indexes
 ```
 
@@ -274,6 +297,8 @@ API errors flow through `src/middleware/errorHandler.js`, which respects `err.st
 |--------|---------|
 | Start | `npm start` |
 | Dev (watch) | `npm run dev` |
+| Monitoring (slim) | `npm run monitoring:up` / `npm run monitoring:down` |
+| Monitoring (full + Loki) | `npm run monitoring:up:full` / `npm run monitoring:down:full` |
 | Tests | Not wired yet (`npm test` placeholder) |
 
 ---
