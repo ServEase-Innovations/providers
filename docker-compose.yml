@@ -52,8 +52,9 @@ services:
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    # Host 3102: do not use 3001 (reserved for preferences in npm run dev)
     ports:
-      - "3001:3000"
+      - "3102:3000"
     depends_on:
       - prometheus
       - loki
