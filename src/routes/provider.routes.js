@@ -27,6 +27,10 @@ const pool = new Pool({
   port: 5432,
 });
 
+console.log(
+  `ℹ️ PG pool target -> host=${"13.126.11.184"} port=${5432} db=${"serveaso"} user=${"serveaso"}`
+);
+
 /* -------------------- HELPERS -------------------- */
 
 // Convert date + time → epoch seconds

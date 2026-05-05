@@ -1,7 +1,10 @@
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
 
-dotenv.config();
+const dotenvPath =
+  process.env.DOTENV_PATH ||
+  (process.env.NODE_ENV === "production" ? ".env.prod" : ".env");
+dotenv.config({ path: dotenvPath });
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -41,6 +44,11 @@ export const sequelize = new Sequelize(
 
 export const connectDB = async () => {
   try {
+    console.log(
+      `ℹ️ Sequelize DB target -> host=${process.env.DB_HOST} port=${
+        Number(process.env.DB_PORT) || 5432
+      } db=${process.env.DB_NAME} user=${process.env.DB_USER}`
+    );
     await sequelize.authenticate();
     console.log("✅ Database connected successfully");
   } catch (error) {
