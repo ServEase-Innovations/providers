@@ -19,16 +19,24 @@ const router = Router();
 const { Pool } = pg;
 
 /* -------------------- DB -------------------- */
+const pgHost = process.env.DB_HOST || process.env.TARGET_DB_HOST || "localhost";
+const pgPort = Number(process.env.DB_PORT || process.env.TARGET_DB_PORT || 5432);
+const pgUser = process.env.DB_USER || process.env.TARGET_DB_USER || "serveaso";
+const pgPassword =
+  process.env.DB_PASSWORD || process.env.TARGET_DB_PASSWORD || "serveaso";
+const pgDatabase =
+  process.env.DB_NAME || process.env.TARGET_DB_NAME || "serveaso";
+
 const pool = new Pool({
-  host: "13.126.11.184",
-  user: "serveaso",
-  password: "serveaso",
-  database: "serveaso",
-  port: 5432,
+  host: pgHost,
+  user: pgUser,
+  password: pgPassword,
+  database: pgDatabase,
+  port: pgPort,
 });
 
 console.log(
-  `ℹ️ PG pool target -> host=${"13.126.11.184"} port=${5432} db=${"serveaso"} user=${"serveaso"}`
+  `ℹ️ PG pool target -> host=${pgHost} port=${pgPort} db=${pgDatabase} user=${pgUser}`
 );
 
 /* -------------------- HELPERS -------------------- */
