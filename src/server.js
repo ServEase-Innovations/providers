@@ -4,7 +4,10 @@ import dotenv from "dotenv";
 import { connectDB } from "./config/database.js";
 import { bootstrapSchemaFromDevDb } from "./scripts/bootstrapFromDevDb.js";
 
-dotenv.config();
+const dotenvPath =
+  process.env.DOTENV_PATH ||
+  (process.env.NODE_ENV === "production" ? ".env.prod" : ".env");
+dotenv.config({ path: dotenvPath });
 
 const PORT = process.env.PORT || 4000;
 
