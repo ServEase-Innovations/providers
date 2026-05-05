@@ -39,7 +39,7 @@ const Provider = sequelize.define(
 
     buildingName: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
       field: "buildingName",
     },
 
@@ -98,9 +98,7 @@ kycImage: {
 
     emailId: {
       type: DataTypes.STRING,
-      allowNull: false,
-      unique: true,
-      validate: { isEmail: true },
+      allowNull: true,
       field: "emailId",
     },
 
@@ -117,7 +115,7 @@ kycImage: {
 
     firstName: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
       field: "firstName",
     },
 
@@ -141,7 +139,7 @@ kycImage: {
 
     lastName: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
       field: "lastName",
     },
 
@@ -152,7 +150,7 @@ kycImage: {
 
     locality: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
 
     location: {
@@ -173,7 +171,7 @@ kycImage: {
 
     mobileNo: {
       type: DataTypes.BIGINT,
-      allowNull: false,
+      allowNull: true,
       field: "mobileNo",
     },
 
@@ -185,12 +183,12 @@ kycImage: {
 
     pincode: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
     },
 
     rating: {
       type: DataTypes.DECIMAL,
-      allowNull: false,
+      allowNull: true,
       defaultValue: 0,
       validate: { min: 0, max: 5 },
     },
@@ -198,14 +196,14 @@ kycImage: {
     // Active flag used in raw SQL queries ("isactive" column)
     isactive: {
       type: DataTypes.BOOLEAN,
-      allowNull: false,
+      allowNull: true,
       defaultValue: true,
       field: "isactive",
     },
 
     street: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
 
     keyFacts: {

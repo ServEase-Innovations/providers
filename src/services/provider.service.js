@@ -161,24 +161,17 @@ export const addProviderService = async (providerData) => {
     } = providerData;
 
     const resolvedRoles = resolveHousekeepingRoles(providerData);
-    if (resolvedRoles.length === 0) {
-      const err = new Error(
-        "housekeepingRoles is required: send a non-empty array, e.g. [\"COOK\",\"MAID\"]"
-      );
-      err.statusCode = 400;
-      throw err;
-    }
 
-    // 1️⃣ Create addresses
-    const correspondence = await Address.create(
-      correspondenceAddress,
-      { transaction }
-    );
+    // 1️⃣ Create addresses only when payload includes them
+    const correspondence =
+      correspondenceAddress && typeof correspondenceAddress === "object"
+        ? await Address.create(correspondenceAddress, { transaction })
+        : null;
 
-    const permanent = await Address.create(
-      permanentAddress,
-      { transaction }
-    );
+    const permanent =
+      permanentAddress && typeof permanentAddress === "object"
+        ? await Address.create(permanentAddress, { transaction })
+        : null;
 
     // 2️⃣ Create provider FIRST
     const provider = await Provider.create(
@@ -187,11 +180,11 @@ export const addProviderService = async (providerData) => {
         housekeepingRole: resolvedRoles[0] ?? null,
         // Persist raw timeslot string on provider row as well
         timeslot: providerData.timeslot,
-        permanent_address_id: permanent.id,
+        permanent_address_id: permanent?.id ?? null,
         kycType: providerData.kycType,
     kycNumber: providerData.kycNumber,
     kycImage: providerData.kycImage || null,
-        correspondence_address_id: correspondence.id,
+        correspondence_address_id: correspondence?.id ?? null,
         languageKnown: Array.isArray(languages)
   ? languages.join(",")
   : languages,
@@ -212,13 +205,15 @@ export const addProviderService = async (providerData) => {
       transaction
     );
 
-    await ServiceProviderRole.bulkCreate(
-      resolvedRoles.map((role) => ({
-        serviceproviderid: provider.serviceproviderid,
-        role,
-      })),
-      { transaction }
-    );
+    if (resolvedRoles.length > 0) {
+      await ServiceProviderRole.bulkCreate(
+        resolvedRoles.map((role) => ({
+          serviceproviderid: provider.serviceproviderid,
+          role,
+        })),
+        { transaction }
+      );
+    }
 
     await transaction.commit();
     return provider;
