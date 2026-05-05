@@ -45,6 +45,10 @@ npm start              # node src/server.js
 | `DB_PORT` | Postgres port (default `5432`) |
 | `NEARBY_MONTHLY_MAX_CANDIDATES` | Cap providers evaluated in `POST /nearby-monthly` (default `100`, clamped 50–2000) |
 | `NEARBY_MONTHLY_MAX_EXCEPTIONS_PER_PROVIDER` | Max `exceptions[]` entries returned per provider in monthly response (default `36`, clamped 12–62) |
+| `BOOTSTRAP_SCHEMA_FROM_DEV` | If `true`, server bootstraps target DB schema from source DB before starting |
+| `SOURCE_DB_HOST` / `SOURCE_DB_PORT` / `SOURCE_DB_USER` / `SOURCE_DB_PASSWORD` / `SOURCE_DB_NAME` | Source (dev) DB used as schema template |
+| `TARGET_DB_HOST` / `TARGET_DB_PORT` / `TARGET_DB_USER` / `TARGET_DB_PASSWORD` / `TARGET_DB_NAME` | Target (prod) DB to create missing schema objects |
+| `SOURCE_DB_SSL`, `TARGET_DB_SSL` | Optional (`true`/`false`) SSL toggle for source/target bootstrap connections |
 
 **Database credentials and host** are currently defined in `src/config/database.js` and in the raw `pg` pool inside `src/routes/provider.routes.js`. For non-local deployments, move these to environment variables and inject them in both places so Sequelize and the geo routes stay aligned.
 
@@ -297,6 +301,7 @@ API errors flow through `src/middleware/errorHandler.js`, which respects `err.st
 |--------|---------|
 | Start | `npm start` |
 | Dev (watch) | `npm run dev` |
+| Bootstrap schema from dev DB | `npm run schema:bootstrap` |
 | Monitoring (slim) | `npm run monitoring:up` / `npm run monitoring:down` |
 | Monitoring (full + Loki) | `npm run monitoring:up:full` / `npm run monitoring:down:full` |
 | Tests | Not wired yet (`npm test` placeholder) |

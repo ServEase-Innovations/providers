@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import Customer from "../model/customer.model.js";
+import Provider from "../model/provider.model.js";
 import { clearOtpSession, getOtpSession, setOtpSession } from "./otp.store.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -36,7 +37,16 @@ const sendOtpViaProvider = async ({ mobile, otp }) => {
     process.env.OTP_PROVIDER_MESSAGE_TEMPLATE ||
     "Dear User, ServEaso: Welcome To ServEaso - an active and seamless home care service provider. Your Verification OTP Code is otp and valid for 10 mins. - ServEaso Team";
 
-  const message = templateMessage.replace(/otp/gi, otp);
+  // Keep DLT template text stable: replace only explicit placeholder token.
+  // Supported placeholder tokens: "{otp}", "{{otp}}", or trailing " otp ".
+  let message = templateMessage;
+  if (message.includes("{{otp}}")) {
+    message = message.replace("{{otp}}", otp);
+  } else if (message.includes("{otp}")) {
+    message = message.replace("{otp}", otp);
+  } else {
+    message = message.replace(" Code is otp ", ` Code is ${otp} `);
+  }
   const requestUrl = new URL(providerBaseUrl);
   requestUrl.searchParams.set("apikey", apiKey);
   requestUrl.searchParams.set("senderid", senderId);
@@ -78,14 +88,22 @@ export const sendOtpService = async (mobileInput) => {
     );
   }
 
-  const customer = await Customer.findOne({ where: { mobileno: mobile } });
-  if (!customer) {
+  const [customer, serviceProvider] = await Promise.all([
+    Customer.findOne({ where: { mobileno: mobile } }),
+    Provider.findOne({ where: { mobileNo: mobile } }),
+  ]);
+  if (!customer && !serviceProvider) {
     throw createAppError(
-      "No customer found for this mobile number.",
+      "No user found for this mobile number.",
       404,
-      "CUSTOMER_NOT_FOUND"
+      "USER_NOT_FOUND"
     );
   }
+
+  const subjectType = serviceProvider ? "SERVICE_PROVIDER" : "CUSTOMER";
+  const subjectId = serviceProvider
+    ? serviceProvider.serviceproviderid
+    : customer.customerid;
 
   const existingSession = getOtpSession(mobile);
   if (
@@ -104,7 +122,8 @@ export const sendOtpService = async (mobileInput) => {
     otpHash: hashOtp(otp),
     expiresAt: Date.now() + OTP_TTL_MS,
     attempts: 0,
-    customerId: customer.customerid,
+    subjectType,
+    subjectId,
     lastSentAt: Date.now(),
   });
 
@@ -112,12 +131,9 @@ export const sendOtpService = async (mobileInput) => {
 
   const response = {
     mobile,
+    subjectType,
     expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
   };
-
-  if (!process.env.OTP_PROVIDER_URL || process.env.NODE_ENV !== "production") {
-    response.devOtp = otp;
-  }
 
   return response;
 };
@@ -158,15 +174,37 @@ export const verifyOtpService = async ({ mobile: mobileInput, otp }) => {
     throw createAppError("Invalid OTP.", 401, "OTP_INVALID");
   }
 
-  const customer = await Customer.findByPk(session.customerId, {
-    attributes: ["customerid", "firstname", "lastname", "emailid", "mobileno"],
-  });
+  let data = null;
+  if (session.subjectType === "SERVICE_PROVIDER") {
+    const serviceProvider = await Provider.findByPk(session.subjectId, {
+      attributes: [
+        "serviceproviderid",
+        "firstName",
+        "lastName",
+        "emailId",
+        "mobileNo",
+      ],
+    });
+    data = {
+      role: "SERVICE_PROVIDER",
+      serviceProviderId: serviceProvider?.serviceproviderid ?? null,
+      serviceProvider,
+    };
+  } else {
+    const customer = await Customer.findByPk(session.subjectId, {
+      attributes: ["customerid", "firstname", "lastname", "emailid", "mobileno"],
+    });
+    data = {
+      role: "CUSTOMER",
+      customerId: customer?.customerid ?? null,
+      customer,
+    };
+  }
 
   clearOtpSession(mobile);
 
   return {
     token: crypto.randomBytes(24).toString("hex"),
-    role: "CUSTOMER",
-    customer,
+    ...data,
   };
 };
