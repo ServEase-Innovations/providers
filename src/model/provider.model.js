@@ -40,13 +40,13 @@ const Provider = sequelize.define(
     buildingName: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "buildingName",
+      field: "buildingname",
     },
 
     cookingSpeciality: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "cookingSpeciality",
+      field: "cookingspeciality",
     },
 
     vendorId: {
@@ -58,7 +58,7 @@ const Provider = sequelize.define(
     currentLocation: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "currentLocation",
+      field: "currentlocation",
     },
 
     diet: {
@@ -99,7 +99,7 @@ kycImage: {
     emailId: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "emailId",
+      field: "emailid",
     },
 
     enrolleddate: {
@@ -116,7 +116,7 @@ kycImage: {
     firstName: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "firstName",
+      field: "firstname",
     },
 
     gender: {
@@ -127,7 +127,7 @@ kycImage: {
     housekeepingRole: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "housekeepingRole",
+      field: "housekeepingrole",
     },
 
     // Request/response: nannyCareType (codes as string[] or CSV). DB: comma-separated TEXT.
@@ -140,7 +140,7 @@ kycImage: {
     lastName: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "lastName",
+      field: "lastname",
     },
 
     latitude: {
@@ -166,19 +166,19 @@ kycImage: {
     middleName: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "middleName",
+      field: "middlename",
     },
 
     mobileNo: {
       type: DataTypes.BIGINT,
       allowNull: true,
-      field: "mobileNo",
+      field: "mobileno",
     },
 
     nearbyLocation: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: "nearbyLocation",
+      field: "nearbylocation",
     },
 
     pincode: {
