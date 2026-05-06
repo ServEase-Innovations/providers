@@ -53,6 +53,7 @@ const statements = [
   // Ensure expected provider columns exist in case PROD schema lags DEV
   `ALTER TABLE public.serviceprovider
      ADD COLUMN IF NOT EXISTS buildingname varchar(255),
+     ADD COLUMN IF NOT EXISTS cookingspeciality varchar(255),
      ADD COLUMN IF NOT EXISTS currentlocation varchar(255),
      ADD COLUMN IF NOT EXISTS emailid varchar(255),
      ADD COLUMN IF NOT EXISTS firstname varchar(255),
@@ -96,6 +97,10 @@ const statements = [
   // This avoids runtime failures when environments were created from mixed dumps.
   `DO $$
    BEGIN
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='cookingSpeciality') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET cookingspeciality = COALESCE(cookingspeciality, "cookingSpeciality") WHERE "cookingSpeciality" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "cookingSpeciality"';
+     END IF;
      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='buildingName') THEN
        EXECUTE 'UPDATE public.serviceprovider SET buildingname = COALESCE(buildingname, "buildingName") WHERE "buildingName" IS NOT NULL';
        EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "buildingName"';
