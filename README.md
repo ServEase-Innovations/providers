@@ -36,6 +36,28 @@ npm start              # node src/server.js
 
 ---
 
+## CI/CD: deploy to EC2 (GitHub Actions)
+
+Workflow: [`.github/workflows/deploy-ec2.yml`](.github/workflows/deploy-ec2.yml)
+
+- **Triggers:** push to `main`, or **Run workflow** (manual) in the Actions tab.
+- **Steps:** checks that the Docker image builds locally in CI → `rsync` of the repo to the server (excluding `.git` and `node_modules`) → on the EC2 host: `docker compose build --no-cache app` / `docker compose up -d app` from `docker-compose.yml`.
+
+Configure these **repository secrets** in GitHub (Settings → Secrets and variables → Actions):
+
+| Secret | Description |
+|--------|--------------|
+| `EC2_HOST` | Public hostname or IPv4 address of the instance |
+| `EC2_USER` | SSH login (often `ubuntu` or `ec2-user`) |
+| `EC2_SSH_KEY` | Private key (PEM) that matches a public key on the instance (e.g. `~/.ssh/authorized_keys`) |
+| `EC2_DEPLOY_PATH` | Absolute directory on the server that already exists and will receive the code (e.g. `/home/ubuntu/providers`) |
+
+**On the EC2 instance:** install Docker and the Docker Compose plugin, ensure the deploy user can run Docker (e.g. in the `docker` group). Keep `.env`/`.env.prod` and any Compose overrides on the host only—not in Git. If production needs env vars inside the container, add an `env_file` or `environment` block to the `app` service in `docker-compose.yml` (do not commit secrets).
+
+If you use `docker run` instead of Compose, replace the remote commands in the workflow with your own script.
+
+---
+
 ## Environment variables
 
 | Variable | Purpose |
