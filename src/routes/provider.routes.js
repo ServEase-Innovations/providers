@@ -1717,7 +1717,7 @@ router.post("/check-mobile", async (req, res) => {
       `SELECT EXISTS (
         SELECT 1 FROM customer WHERE "mobileno" = $1
         UNION ALL
-        SELECT 1 FROM serviceprovider WHERE "mobileNo" = $1
+        SELECT 1 FROM serviceprovider WHERE "mobileno" = $1
       ) AS exists;`,
       [mobile]
     );
