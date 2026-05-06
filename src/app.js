@@ -16,7 +16,15 @@ import cors from "cors";
 
 const app = express();
 app.use(requestMetrics);
-app.use(cors());
+const corsOptions = {
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["*"],
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json());
 
 app.get("/metrics", async (req, res, next) => {
