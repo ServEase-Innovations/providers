@@ -56,6 +56,7 @@ const statements = [
      ADD COLUMN IF NOT EXISTS kycnumber varchar(255),
      ADD COLUMN IF NOT EXISTS kycimage text,
      ADD COLUMN IF NOT EXISTS keyfacts boolean,
+     ADD COLUMN IF NOT EXISTS alternateno bigint,
      ADD COLUMN IF NOT EXISTS bankname varchar(255),
      ADD COLUMN IF NOT EXISTS ifsccode varchar(255),
      ADD COLUMN IF NOT EXISTS accountholdername varchar(255),
@@ -63,6 +64,22 @@ const statements = [
      ADD COLUMN IF NOT EXISTS accounttype varchar(255),
      ADD COLUMN IF NOT EXISTS upiid varchar(255),
      ADD COLUMN IF NOT EXISTS nannycaretypes varchar(255)`,
+  // Some environments still have legacy quoted camelCase column "alternateNo".
+  // Backfill into lowercase alternateno so current model mappings work.
+  `DO $$
+   BEGIN
+     IF EXISTS (
+       SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'serviceprovider'
+         AND column_name = 'alternateNo'
+     ) THEN
+       EXECUTE 'UPDATE public.serviceprovider
+                  SET alternateno = COALESCE(alternateno, "alternateNo")
+                WHERE "alternateNo" IS NOT NULL';
+     END IF;
+   END $$`,
 
   // Remove restrictive language check for flexible payloads
   `ALTER TABLE public.serviceprovider
