@@ -52,6 +52,17 @@ const statements = [
 
   // Ensure expected provider columns exist in case PROD schema lags DEV
   `ALTER TABLE public.serviceprovider
+     ADD COLUMN IF NOT EXISTS buildingname varchar(255),
+     ADD COLUMN IF NOT EXISTS currentlocation varchar(255),
+     ADD COLUMN IF NOT EXISTS emailid varchar(255),
+     ADD COLUMN IF NOT EXISTS firstname varchar(255),
+     ADD COLUMN IF NOT EXISTS lastname varchar(255),
+     ADD COLUMN IF NOT EXISTS middlename varchar(255),
+     ADD COLUMN IF NOT EXISTS mobileno bigint,
+     ADD COLUMN IF NOT EXISTS nearbylocation varchar(255),
+     ADD COLUMN IF NOT EXISTS housekeepingrole varchar(255),
+     ADD COLUMN IF NOT EXISTS languageknown varchar(255),
+     ADD COLUMN IF NOT EXISTS vendorid bigint,
      ADD COLUMN IF NOT EXISTS kyctype varchar(255),
      ADD COLUMN IF NOT EXISTS kycnumber varchar(255),
      ADD COLUMN IF NOT EXISTS kycimage text,
@@ -79,6 +90,59 @@ const statements = [
                   SET alternateno = COALESCE(alternateno, "alternateNo")
                 WHERE "alternateNo" IS NOT NULL';
        EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "alternateNo"';
+     END IF;
+   END $$`,
+  // Normalize legacy quoted camelCase provider columns to DEV-standard lowercase names.
+  // This avoids runtime failures when environments were created from mixed dumps.
+  `DO $$
+   BEGIN
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='buildingName') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET buildingname = COALESCE(buildingname, "buildingName") WHERE "buildingName" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "buildingName"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='currentLocation') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET currentlocation = COALESCE(currentlocation, "currentLocation") WHERE "currentLocation" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "currentLocation"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='emailId') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET emailid = COALESCE(emailid, "emailId") WHERE "emailId" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "emailId"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='firstName') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET firstname = COALESCE(firstname, "firstName") WHERE "firstName" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "firstName"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='lastName') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET lastname = COALESCE(lastname, "lastName") WHERE "lastName" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "lastName"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='middleName') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET middlename = COALESCE(middlename, "middleName") WHERE "middleName" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "middleName"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='mobileNo') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET mobileno = COALESCE(mobileno, "mobileNo") WHERE "mobileNo" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "mobileNo"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='nearbyLocation') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET nearbylocation = COALESCE(nearbylocation, "nearbyLocation") WHERE "nearbyLocation" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "nearbyLocation"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='housekeepingRole') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET housekeepingrole = COALESCE(housekeepingrole, "housekeepingRole") WHERE "housekeepingRole" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "housekeepingRole"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='languageKnown') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET languageknown = COALESCE(languageknown, "languageKnown") WHERE "languageKnown" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "languageKnown"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='vendorId') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET vendorid = COALESCE(vendorid, "vendorId") WHERE "vendorId" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "vendorId"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='keyFacts') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET keyfacts = COALESCE(keyfacts, "keyFacts") WHERE "keyFacts" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "keyFacts"';
      END IF;
    END $$`,
 
