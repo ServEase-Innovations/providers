@@ -68,31 +68,52 @@ const statements = [
   `ALTER TABLE public.serviceprovider
      DROP CONSTRAINT IF EXISTS serviceprovider_languageknown_check`,
 
-  // Fix missing identity defaults observed in PROD
-  `CREATE SEQUENCE IF NOT EXISTS public.serviceprovider_seq`,
-  `ALTER TABLE public.serviceprovider
-     ALTER COLUMN serviceproviderid
-     SET DEFAULT nextval('public.serviceprovider_seq')`,
-  `ALTER SEQUENCE public.serviceprovider_seq
-     OWNED BY public.serviceprovider.serviceproviderid`,
-  `SELECT setval(
-      'public.serviceprovider_seq',
-      COALESCE((SELECT MAX(serviceproviderid) FROM public.serviceprovider), 1),
-      true
-   )`,
-
-  `CREATE SEQUENCE IF NOT EXISTS public.address_id_seq`,
-  `ALTER TABLE public.address
-     ALTER COLUMN id
-     SET DEFAULT nextval('public.address_id_seq')`,
-  `ALTER SEQUENCE public.address_id_seq
-     OWNED BY public.address.id`,
-  `SELECT setval(
-      'public.address_id_seq',
-      COALESCE((SELECT MAX(id) FROM public.address), 1),
-      true
-   )`,
 ];
+
+async function isIdentityColumn(tableName, columnName) {
+  const [rows] = await sequelize.query(
+    `SELECT is_identity
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = :tableName
+        AND column_name = :columnName`,
+    { replacements: { tableName, columnName } }
+  );
+  return rows?.[0]?.is_identity === "YES";
+}
+
+async function ensureSequenceDefault({
+  tableName,
+  columnName,
+  sequenceName,
+  maxValueExpression,
+}) {
+  const identity = await isIdentityColumn(tableName, columnName);
+  if (identity) {
+    console.log(
+      `ℹ️ Skipping sequence default patch for ${tableName}.${columnName} (identity column).`
+    );
+    return;
+  }
+
+  await sequelize.query(`CREATE SEQUENCE IF NOT EXISTS public.${sequenceName}`);
+  await sequelize.query(
+    `ALTER TABLE public.${tableName}
+       ALTER COLUMN ${columnName}
+       SET DEFAULT nextval('public.${sequenceName}')`
+  );
+  await sequelize.query(
+    `ALTER SEQUENCE public.${sequenceName}
+       OWNED BY public.${tableName}.${columnName}`
+  );
+  await sequelize.query(
+    `SELECT setval(
+      'public.${sequenceName}',
+      COALESCE((SELECT MAX(${maxValueExpression}) FROM public.${tableName}), 1),
+      true
+    )`
+  );
+}
 
 export async function patchProviderSchema() {
   console.log("ℹ️ Running provider schema patch...");
@@ -107,6 +128,21 @@ export async function patchProviderSchema() {
       throw error;
     }
   }
+
+  // Fix missing sequence defaults where PKs are not identity columns.
+  await ensureSequenceDefault({
+    tableName: "serviceprovider",
+    columnName: "serviceproviderid",
+    sequenceName: "serviceprovider_seq",
+    maxValueExpression: "serviceproviderid",
+  });
+  await ensureSequenceDefault({
+    tableName: "address",
+    columnName: "id",
+    sequenceName: "address_id_seq",
+    maxValueExpression: "id",
+  });
+
   console.log("✅ Provider schema patch completed.");
 }
 
