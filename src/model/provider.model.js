@@ -34,7 +34,7 @@ const Provider = sequelize.define(
     alternateNo: {
       type: DataTypes.BIGINT,
       allowNull: true,
-      field: "alternateNo",
+      field: "alternateno",
     },
 
     buildingName: {
