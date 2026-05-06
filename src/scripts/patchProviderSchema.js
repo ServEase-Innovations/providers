@@ -78,6 +78,7 @@ const statements = [
        EXECUTE 'UPDATE public.serviceprovider
                   SET alternateno = COALESCE(alternateno, "alternateNo")
                 WHERE "alternateNo" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "alternateNo"';
      END IF;
    END $$`,
 
