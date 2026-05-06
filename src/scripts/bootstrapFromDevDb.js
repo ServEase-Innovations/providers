@@ -208,6 +208,88 @@ async function applyConstraintsAndIndexes(source, target) {
   }
 }
 
+async function repairPrimaryKeyDefaults(source, target) {
+  const { rows: pkRows } = await source.query(
+    `SELECT
+       tc.table_name,
+       kcu.column_name
+     FROM information_schema.table_constraints tc
+     JOIN information_schema.key_column_usage kcu
+       ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+     WHERE tc.table_schema = 'public'
+       AND tc.constraint_type = 'PRIMARY KEY'
+     ORDER BY tc.table_name`
+  );
+
+  for (const pk of pkRows) {
+    const table = pk.table_name;
+    const column = pk.column_name;
+
+    const [{ rows: sourceCol }, { rows: targetCol }] = await Promise.all([
+      source.query(
+        `SELECT
+           pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+           pg_get_expr(ad.adbin, ad.adrelid) AS default_value
+         FROM pg_attribute a
+         JOIN pg_class c ON a.attrelid = c.oid
+         JOIN pg_namespace n ON c.relnamespace = n.oid
+         LEFT JOIN pg_attrdef ad ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
+         WHERE n.nspname = 'public' AND c.relname = $1 AND a.attname = $2`,
+        [table, column]
+      ),
+      target.query(
+        `SELECT
+           pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+           pg_get_expr(ad.adbin, ad.adrelid) AS default_value
+         FROM pg_attribute a
+         JOIN pg_class c ON a.attrelid = c.oid
+         JOIN pg_namespace n ON c.relnamespace = n.oid
+         LEFT JOIN pg_attrdef ad ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
+         WHERE n.nspname = 'public' AND c.relname = $1 AND a.attname = $2`,
+        [table, column]
+      ),
+    ]);
+
+    if (!sourceCol.length || !targetCol.length) continue;
+
+    const src = sourceCol[0];
+    const tgt = targetCol[0];
+    const srcDefault = src.default_value || "";
+    const tgtDefault = tgt.default_value || "";
+    const type = String(src.data_type || "").toLowerCase();
+
+    const expectsSequence =
+      srcDefault.includes("nextval(") ||
+      type === "integer" ||
+      type === "bigint" ||
+      type === "smallint";
+    const hasSequenceDefault = tgtDefault.includes("nextval(");
+
+    if (!expectsSequence || hasSequenceDefault) continue;
+
+    const seqName = `${table}_${column}_seq`;
+    await target.query(
+      `CREATE SEQUENCE IF NOT EXISTS public.${q(seqName)};`
+    );
+    await target.query(
+      `ALTER TABLE public.${q(table)}
+       ALTER COLUMN ${q(column)}
+       SET DEFAULT nextval('public.${seqName}');`
+    );
+    await target.query(
+      `ALTER SEQUENCE public.${q(seqName)}
+       OWNED BY public.${q(table)}.${q(column)};`
+    );
+    await target.query(
+      `SELECT setval('public.${seqName}',
+        COALESCE((SELECT MAX(${q(column)}) FROM public.${q(table)}), 1),
+        true);`
+    );
+    console.log(`~ repaired PK default: ${table}.${column} -> ${seqName}`);
+  }
+}
+
 export async function bootstrapSchemaFromDevDb() {
   validateConfig("SOURCE");
   validateConfig("TARGET");
@@ -220,6 +302,7 @@ export async function bootstrapSchemaFromDevDb() {
     await target.connect();
     await createMissingTablesAndSequences(source, target);
     await applyConstraintsAndIndexes(source, target);
+    await repairPrimaryKeyDefaults(source, target);
     console.log("✅ Schema bootstrap completed.");
   } finally {
     await source.end().catch(() => {});
