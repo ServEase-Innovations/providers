@@ -196,7 +196,7 @@ const Provider = sequelize.define(
     keyFacts: {
       type: DataTypes.BOOLEAN,
       allowNull: true,
-      field: "keyFacts",
+      field: "keyfacts",
     },
 
     correspondence_address_id: {
