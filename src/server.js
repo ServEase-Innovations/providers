@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { connectDB } from "./config/database.js";
 import { bootstrapSchemaFromDevDb } from "./scripts/bootstrapFromDevDb.js";
+import { patchProviderSchema } from "./scripts/patchProviderSchema.js";
 
 const dotenvPath =
   process.env.DOTENV_PATH ||
@@ -19,6 +20,10 @@ const startServer = async () => {
   if (process.env.BOOTSTRAP_SCHEMA_FROM_DEV === "true") {
     console.log("ℹ️ BOOTSTRAP_SCHEMA_FROM_DEV=true, bootstrapping target schema...");
     await bootstrapSchemaFromDevDb();
+  }
+
+  if (process.env.APPLY_PROVIDER_SCHEMA_PATCH !== "false") {
+    await patchProviderSchema();
   }
 
   app.listen(PORT, () => {

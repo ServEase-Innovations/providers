@@ -4,7 +4,8 @@ import {
   addProvider,
   getPaginatedProviders,
   getProviderById,
- updateProvider
+  updateProvider,
+  deleteProvider,
 } from "../controllers/provider.controller.js";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
@@ -1735,4 +1736,5 @@ router.get('/providers',getPaginatedProviders);
 router.get("/serviceprovider/:id", getProviderById);
 router.post('/serviceprovider/add', addProvider)
 router.put("/serviceprovider/:id", updateProvider);
+router.delete("/serviceprovider/:id", deleteProvider);
 export default router;

@@ -502,3 +502,29 @@
  *       500:
  *         description: Internal server error
  */
+
+/**
+ * @swagger
+ * /api/service-providers/serviceprovider/{id}:
+ *   delete:
+ *     summary: Delete service provider (admin — irreversible)
+ *     description: >
+ *       Permanently deletes the provider row plus related slots, roles, availability, engagements,
+ *       ledger/wallet-related rows where applicable (same Postgres database). Cannot be undone.
+ *     tags:
+ *       - Service Providers
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           example: 3552
+ *     responses:
+ *       200:
+ *         description: Provider deleted
+ *       404:
+ *         description: Provider not found
+ *       500:
+ *         description: Internal server error
+ */

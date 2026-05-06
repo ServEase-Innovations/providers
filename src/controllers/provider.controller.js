@@ -5,6 +5,7 @@ import {
   getProviderByIdService,
   updateProviderService
 } from "../services/provider.service.js";
+import { deleteProviderCascade } from "../services/providerDeleteCascade.service.js";
 import { getPagination, getPagingData } from "../utils/pagination.util.js";
 import responseHandling from "../utils/response.util.js";
 import Address from "../model/address.model.js";
@@ -117,6 +118,19 @@ export const updateProvider = async (req, res, next) => {
       "Provider updated successfully",
       updatedProvider
     );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteProvider = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const summary = await deleteProviderCascade(id);
+    if (!summary) {
+      return responseHandling(res, 404, "Provider not found");
+    }
+    return responseHandling(res, 200, "Provider deleted permanently", summary);
   } catch (error) {
     next(error);
   }

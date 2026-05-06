@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "schema:bootstrap": "node src/scripts/bootstrapFromDevDb.js",
+    "schema:patch": "node src/scripts/patchProviderSchema.js",
     "monitoring:up": "docker compose -f monitoring/docker-compose.observability.yml up -d",
     "monitoring:down": "docker compose -f monitoring/docker-compose.observability.yml down",
     "monitoring:up:full": "docker compose -f docker-compose.observability-full.yml up -d",
