@@ -852,19 +852,19 @@ const filterQuery = `
 AND (
   (
     $5::text IS NOT NULL 
-    AND sp."experience" BETWEEN 
+    AND sp.experience BETWEEN 
       split_part($5::text, '-', 1)::int 
       AND 
       split_part($5::text, '-', 2)::int
   )
-  OR ($6::numeric IS NOT NULL AND sp."rating" >= $6::numeric)
-  OR ($7::text IS NOT NULL AND LOWER(sp."gender") = LOWER($7::text))
-  OR ($8::text IS NOT NULL AND LOWER(sp."diet") = LOWER($8::text))
+  OR ($6::numeric IS NOT NULL AND sp.rating >= $6::numeric)
+  OR ($7::text IS NOT NULL AND LOWER(sp.gender) = LOWER($7::text))
+  OR ($8::text IS NOT NULL AND LOWER(sp.diet) = LOWER($8::text))
   OR (
     $9::text[] IS NOT NULL AND EXISTS (
       SELECT 1
       FROM unnest($9::text[]) AS lang
-      WHERE LOWER(COALESCE(sp."languageknown", '')) LIKE '%' || LOWER(lang) || '%'
+      WHERE LOWER(COALESCE(sp.languageknown, '')) LIKE '%' || LOWER(lang) || '%'
     )
   )
   OR ($5 IS NULL AND $6 IS NULL AND $7 IS NULL AND $8 IS NULL AND $9 IS NULL)
@@ -875,65 +875,65 @@ AND (
       `
 
       SELECT
-        sp."serviceproviderid",
-        sp."firstName",
-        sp."lastName",
-        sp."gender",
-        sp."experience",
-        sp."rating",
-        sp."profilepic",
-        sp."mobileNo",
-        sp."emailId",
-        sp."diet",
-        sp."cookingSpeciality",
-        sp."languageknown",
-        sp."locality",
-        sp."location",
-        sp."pincode",
-        sp."latitude",
-        sp."longitude",
-        sp."dob",
-        sp."timeslot",
-        sp."housekeepingRole",
+        sp.serviceproviderid,
+        sp.firstname AS "firstName",
+        sp.lastname AS "lastName",
+        sp.gender,
+        sp.experience,
+        sp.rating,
+        sp.profilepic,
+        sp.mobileno AS "mobileNo",
+        sp.emailid AS "emailId",
+        sp.diet,
+        sp.cookingspeciality AS "cookingSpeciality",
+        sp.languageknown,
+        sp.locality,
+        sp.location,
+        sp.pincode,
+        sp.latitude,
+        sp.longitude,
+        sp.dob,
+        sp.timeslot,
+        sp.housekeepingrole AS "housekeepingRole",
         (
           6371 * acos(
-            cos(radians($1)) * cos(radians(sp."latitude")) *
-            cos(radians(sp."longitude") - radians($2)) +
-            sin(radians($1)) * sin(radians(sp."latitude"))
+            cos(radians($1)) * cos(radians(sp.latitude)) *
+            cos(radians(sp.longitude) - radians($2)) +
+            sin(radians($1)) * sin(radians(sp.latitude))
           )
         ) AS distance_km
-      FROM "serviceprovider" sp
-      WHERE sp."isactive" = true
+      FROM serviceprovider sp
+      WHERE sp.isactive = true
         AND (
           EXISTS (
             SELECT 1
             FROM serviceprovider_roles r
-            WHERE r.serviceproviderid = sp."serviceproviderid"
+            WHERE r.serviceproviderid = sp.serviceproviderid
               AND LOWER(TRIM(r.role::text)) = LOWER(TRIM($3::text))
           )
           OR (
             NOT EXISTS (
               SELECT 1
               FROM serviceprovider_roles r2
-              WHERE r2.serviceproviderid = sp."serviceproviderid"
+              WHERE r2.serviceproviderid = sp.serviceproviderid
             )
-            AND LOWER(TRIM(COALESCE(sp."housekeepingRole", ''::text))) = LOWER(TRIM($3::text))
+            AND LOWER(TRIM(COALESCE(sp.housekeepingrole, ''::text))) = LOWER(TRIM($3::text))
           )
           OR (
-            LOWER(TRIM(COALESCE(sp."housekeepingRole", ''::text))) = LOWER(TRIM($3::text))
+            LOWER(TRIM(COALESCE(sp.housekeepingrole, ''::text))) = LOWER(TRIM($3::text))
             AND NOT EXISTS (
               SELECT 1
               FROM serviceprovider_roles r3
-              WHERE r3.serviceproviderid = sp."serviceproviderid"
+              WHERE r3.serviceproviderid = sp.serviceproviderid
                 AND LOWER(TRIM(r3.role::text)) = LOWER(TRIM($3::text))
             )
           )
         )
         AND (
           6371 * acos(
-            cos(radians($1)) * cos(radians(sp."latitude")) *
-            cos(radians(sp."longitude") - radians($2)) +
-            sin(radians($1)) * sin(radians(sp."latitude"))
+            cos(radians($1)) * cos(radians(sp.latitude)) *
+            cos(radians(sp.longitude) - radians($2)) +
+            sin(radians($1)) * sin(radians(sp.latitude))
           )
         ) <= $4
 
