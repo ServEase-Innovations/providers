@@ -4,10 +4,11 @@ import { DataTypes } from "sequelize";
 const ServiceProviderRole = sequelize.define(
   "ServiceProviderRole",
   {
-    serviceproviderid: {
+    serviceProviderId: {
       type: DataTypes.BIGINT,
       primaryKey: true,
       allowNull: false,
+      field: "serviceproviderid",
     },
     role: {
       type: DataTypes.STRING(32),

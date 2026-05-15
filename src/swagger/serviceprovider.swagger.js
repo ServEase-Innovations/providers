@@ -92,8 +92,14 @@
  *                 example: "BOTH"
  *
  *               languageKnown:
- *                 type: string
- *                 example: "Hindi, English"
+ *                 oneOf:
+ *                   - type: array
+ *                     items:
+ *                       type: string
+ *                     example: ["Hindi", "English"]
+ *                   - type: string
+ *                     example: "Hindi, English"
+ *                 description: Stored as comma-separated text in DB; API responses use string[].
  *
  *               isactive:
  *                 type: boolean
@@ -212,7 +218,7 @@
  *
  *               languages:
  *                 type: array
- *                 description: Stored as languageKnown (comma-separated). Use this or languageKnown string.
+ *                 description: Joined into `languageKnown` in DB. You may also send `languageKnown` as a string or string array.
  *                 items:
  *                   type: string
  *                   example: "Bengali"
@@ -328,7 +334,7 @@
  * /api/service-providers/serviceprovider/{id}:
  *   get:
  *     summary: Get service provider by ID
- *     description: Retrieve a single service provider by its `serviceproviderid`.
+ *     description: Retrieve a single service provider by its `serviceProviderId`.
  *     tags:
  *       - Service Providers
  *     parameters:
@@ -351,7 +357,7 @@
  * /api/service-providers/serviceprovider/{id}:
  *   put:
  *     summary: Update service provider by ID
- *     description: Update an existing service provider using its `serviceproviderid`.
+ *     description: Update an existing service provider using its `serviceProviderId`.
  *     tags:
  *       - Service Providers
  *     parameters:
@@ -430,8 +436,14 @@
  *                 example: "South Indian"
  *
  *               languageKnown:
- *                 type: string
- *                 example: "Hindi, English"
+ *                 oneOf:
+ *                   - type: array
+ *                     items:
+ *                       type: string
+ *                     example: ["Hindi", "English"]
+ *                   - type: string
+ *                     example: "Hindi, English"
+ *                 description: Stored as comma-separated text in DB; API responses use string[].
  *
  *               isactive:
  *                 type: boolean

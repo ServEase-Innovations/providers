@@ -7,6 +7,7 @@ import {
   updateProvider,
   deleteProvider,
 } from "../controllers/provider.controller.js";
+import { languageKnownToArray } from "../utils/languageKnown.util.js";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
@@ -278,16 +279,16 @@ WHERE
  *                   items:
  *                     type: object
  *                     properties:
- *                       serviceproviderid:
+ *                       serviceProviderId:
  *                         type: integer
  *                         example: 3403
  *                       firstName:
  *                         type: string
  *                         example: Test
- *                       lastname:
+ *                       lastName:
  *                         type: string
  *                         example: Provider
- *                       distance_km:
+ *                       distanceKm:
  *                         type: number
  *                         example: 0.07
  *                       previouslyBooked:
@@ -457,30 +458,30 @@ router.get("/nearby", async (req, res) => {
     const { rows } = await pool.query(SQL_QUERY, values);
 
     const providers = rows.map(p => ({
-      serviceproviderid: p.serviceproviderid,
+      serviceProviderId: p.serviceProviderId,
       firstName: p.firstName,
-      middlename: p.middlename,
-      lastname: p.lastname,
+      middleName: p.middleName,
+      lastName: p.lastName,
       gender: p.gender,
-      housekeepingrole: p.housekeepingrole,
+      housekeepingRole: p.housekeepingRole,
       experience: p.experience,
       rating: p.rating,
-      profilepic: p.profilepic,
+      profilePic: p.profilePic,
 
-      mobileno: p.mobileno,
+      mobileNo: p.mobileNo,
       emailId: p.emailId,
 
       locality: p.locality,
       location: p.location,
-      pincode: p.pincode,
+      pinCode: p.pinCode,
 
       diet: p.diet,
-      cookingspeciality: p.cookingspeciality,
-      languageknown: p.languageknown,
+      cookingSpeciality: p.cookingSpeciality,
+      languageKnown: languageKnownToArray(p.languageKnown),
 
       latitude: p.latitude,
       longitude: p.longitude,
-      distance_km: Number(p.distance_km.toFixed(2)),
+      distanceKm: p.distance_km != null ? Number(p.distance_km.toFixed(2)) : null,
 
       availableNow: p.available_now,
       nextAvailableAt:
@@ -830,6 +831,17 @@ router.post("/nearby-monthly", async (req, res) => {
 
     const roleSearchNorm = String(role).trim();
 
+    let latNum = Number(lat);
+    let lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      return res.status(400).json({
+        message: "Invalid lat/lng. Send finite numbers (e.g. customer latitude/longitude).",
+      });
+    }
+    if (Math.abs(latNum) > 90 && Math.abs(lngNum) <= 90) {
+      [latNum, lngNum] = [lngNum, latNum];
+    }
+
     const customerIdInput = customerID ?? customerId;
     const customerIdRaw =
       customerIdInput != null && customerIdInput !== ""
@@ -875,21 +887,22 @@ AND (
       `
 
       SELECT
-        sp.serviceproviderid,
+        sp.serviceproviderid AS "serviceProviderId",
         sp.firstname AS "firstName",
+        sp.middlename AS "middleName",
         sp.lastname AS "lastName",
         sp.gender,
         sp.experience,
         sp.rating,
-        sp.profilepic,
+        sp.profilepic AS "profilePic",
         sp.mobileno AS "mobileNo",
         sp.emailid AS "emailId",
         sp.diet,
         sp.cookingspeciality AS "cookingSpeciality",
-        sp.languageknown,
+        sp.languageknown AS "languageKnown",
         sp.locality,
         sp.location,
-        sp.pincode,
+        sp.pincode AS "pinCode",
         sp.latitude,
         sp.longitude,
         sp.dob,
@@ -943,8 +956,8 @@ AND (
       `,
       // [lat, lng, roleSearchNorm, radius]
 [
-  lat,                     // $1
-  lng,                     // $2
+  latNum,                     // $1
+  lngNum,                     // $2
   roleSearchNorm,          // $3
   radius,                  // $4
   experienceRange ?? null,   // $5
@@ -959,11 +972,11 @@ AND (
       return res.json({ count: 0, providers: [] });
     }
 
-    const providerIds = providersRes.rows.map(p => p.serviceproviderid);
+    const providerIds = providersRes.rows.map((p) => p.serviceProviderId);
 
     const rolesRes = await pool.query(
       `
-      SELECT serviceproviderid, role
+      SELECT serviceproviderid AS "serviceProviderId", role
       FROM serviceprovider_roles
       WHERE serviceproviderid = ANY($1::bigint[])
       ORDER BY role
@@ -972,7 +985,7 @@ AND (
     );
     const rolesBySpId = {};
     for (const row of rolesRes.rows) {
-      const id = String(row.serviceproviderid);
+      const id = String(row.serviceProviderId);
       rolesBySpId[id] ??= [];
       if (row.role != null && String(row.role).trim() !== "") {
         rolesBySpId[id].push(String(row.role).trim());
@@ -986,7 +999,7 @@ AND (
         `
         SELECT DISTINCT ON (e."serviceproviderid")
           e."engagement_id" AS "engagementId",
-          e."serviceproviderid" AS "serviceproviderid",
+          e."serviceproviderid" AS "serviceProviderId",
           e."booking_type" AS "bookingType",
           e."service_type" AS "serviceType",
           e."start_date" AS "startDate",
@@ -1012,7 +1025,7 @@ AND (
         [customerIdRaw, providerIds]
       );
       for (const row of prevRes.rows) {
-        const id = String(row.serviceproviderid);
+        const id = String(row.serviceProviderId);
         previousBookingByProvider.set(id, {
           engagementId: row.engagementId != null ? String(row.engagementId) : null,
           bookingType: row.bookingType,
@@ -1037,7 +1050,7 @@ AND (
     /* ---------- STEP 2: Fetch Weekly Slots ---------- */
     const weeklySlotsRes = await pool.query(
       `
-      SELECT serviceproviderid, day_of_week, slot_start, slot_end
+      SELECT serviceproviderid AS "serviceProviderId", day_of_week, slot_start, slot_end
       FROM provider_weekly_slots
       WHERE serviceproviderid = ANY($1)
       `,
@@ -1048,18 +1061,18 @@ AND (
     /** @type {Record<string, 'provider_weekly_slots' | 'timeslot' | 'none'>} */
     const weeklySlotSourceByProvider = {};
     for (const row of weeklySlotsRes.rows) {
-      const sid = String(row.serviceproviderid);
+      const sid = String(row.serviceProviderId);
       weeklySlotSourceByProvider[sid] = "provider_weekly_slots";
       weeklySlotsByProvider[sid] ??= [];
       weeklySlotsByProvider[sid].push({
         day_of_week: Number(row.day_of_week),
         slot_start: normalizeTimeForEpoch(row.slot_start),
-        slot_end: normalizeTimeForEpoch(row.slot_end)
+        slot_end: normalizeTimeForEpoch(row.slot_end),
       });
     }
 
     for (const p of providersRes.rows) {
-      const id = String(p.serviceproviderid);
+      const id = String(p.serviceProviderId);
       const existing = weeklySlotsByProvider[id];
       if (!existing || existing.length === 0) {
         const derived = weeklySlotsFromTimeslotString(p.timeslot);
@@ -1071,7 +1084,7 @@ AND (
     }
 
     for (const p of providersRes.rows) {
-      const id = String(p.serviceproviderid);
+      const id = String(p.serviceProviderId);
       const slots = weeklySlotsByProvider[id];
       if (!weeklySlotSourceByProvider[id]) {
         weeklySlotSourceByProvider[id] =
@@ -1083,7 +1096,7 @@ AND (
     const bookingsRes = await pool.query(
       `
       SELECT
-        pa.serviceproviderid,
+        pa.serviceproviderid AS "serviceProviderId",
         pa.date::text AS "dateStr",
         pa.slot_start_epoch,
         pa.slot_end_epoch,
@@ -1104,7 +1117,7 @@ AND (
     const paFreeRes = await pool.query(
       `
       SELECT
-        pa.serviceproviderid,
+        pa.serviceproviderid AS "serviceProviderId",
         pa.engagement_id,
         pa.date::text AS "dateStr"
       FROM provider_availability pa
@@ -1121,7 +1134,7 @@ AND (
     const engagementsRes = await pool.query(
       `
       SELECT
-        e.serviceproviderid,
+        e.serviceproviderid AS "serviceProviderId",
         e.engagement_id AS "engagementId",
         e.booking_type,
         e.start_date,
@@ -1152,7 +1165,7 @@ AND (
     for (const f of paFreeRes.rows) {
       const d = f.dateStr.trim().slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
-      paFreeBySpAndCalendarDate.add(`${String(f.serviceproviderid)}:${d}`);
+      paFreeBySpAndCalendarDate.add(`${String(f.serviceProviderId)}:${d}`);
     }
     const engagementVacationBySpAndDate = new Set();
     {
@@ -1164,7 +1177,7 @@ AND (
         .startOf("day");
       for (const e0 of engagementsRes.rows) {
         if (e0.booking_type === "ON_DEMAND") continue;
-        const sp0 = String(e0.serviceproviderid);
+        const sp0 = String(e0.serviceProviderId);
         for (
           let c = r0.clone();
           !c.isAfter(r1, "day");
@@ -1195,7 +1208,7 @@ AND (
     const paBookedCountBySp = {};
     const providersWithPaBookedRows = new Set();
     for (const b of bookingsRes.rows) {
-      const spid = String(b.serviceproviderid);
+      const spid = String(b.serviceProviderId);
       providersWithPaBookedRows.add(spid);
       paBookedCountBySp[spid] = (paBookedCountBySp[spid] || 0) + 1;
       const normalized = normalizeProviderAvailabilityBookedSlot(
@@ -1229,7 +1242,7 @@ AND (
     const engOnDemandBySp = {};
 
     for (const e of engagementsRes.rows) {
-      const spid = String(e.serviceproviderid);
+      const spid = String(e.serviceProviderId);
 
       if (e.booking_type === "ON_DEMAND") {
         engOnDemandBySp[spid] = (engOnDemandBySp[spid] || 0) + 1;
@@ -1317,7 +1330,7 @@ AND (
     const evaluatedProviders = [];
 
     for (const p of providersRes.rows) {
-      const pidKey = String(p.serviceproviderid);
+      const pidKey = String(p.serviceProviderId);
       const providerWeeklySlots = weeklySlotsByProvider[pidKey] || [];
 
       const baseBookings = bookingsByProvider[pidKey] || [];
@@ -1549,18 +1562,22 @@ AND (
       
 
       const providerRow = {
-        serviceproviderid: p.serviceproviderid,
+        serviceProviderId: p.serviceProviderId,
         firstName: p.firstName,
+        middleName: p.middleName,
         lastName: p.lastName,
         gender: p.gender,
         experience: p.experience,
         rating: p.rating,
         diet: p.diet,
         cookingSpeciality: p.cookingSpeciality,
-        languageknown: p.languageknown,
+        languageKnown: languageKnownToArray(p.languageKnown),
         locality: p.locality,
         location: p.location,
-        pincode: p.pincode,
+        pinCode: p.pinCode,
+        mobileNo: p.mobileNo,
+        emailId: p.emailId,
+        profilePic: p.profilePic,
         latitude: p.latitude,
         longitude: p.longitude,
         age: p.dob != null ? getAge(p.dob) : null,
@@ -1580,6 +1597,7 @@ AND (
           }
           return p.housekeepingRole ? [String(p.housekeepingRole).trim()] : [];
         })(),
+        distanceKm: Number(p.distance_km.toFixed(2)),
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
         monthlyAvailability: {
@@ -1636,7 +1654,7 @@ AND (
       p => !p.monthlyAvailability.fullyAvailable
     );
 
-    available.sort((a, b) => a.distance_km - b.distance_km);
+    available.sort((a, b) => a.distanceKm - b.distanceKm);
 
     if (available.length > 0) {
       available[0].bestMatch = true;
@@ -1657,7 +1675,7 @@ AND (
         const bf = b.monthlyAvailability.fullyAvailable ? 1 : 0;
         if (bf !== af) return bf - af;
 
-        return a.distance_km - b.distance_km;
+        return a.distanceKm - b.distanceKm;
       });
 
       if (ordered.length > 0) ordered[0].bestMatch = true;

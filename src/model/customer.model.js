@@ -1,104 +1,131 @@
 import { sequelize } from "../config/database.js";
 import { DataTypes } from "sequelize";
 
-const Customer = sequelize.define("Customer", {
-    customerid: {
-        type: DataTypes.BIGINT,
-        primaryKey: true,
-        autoIncrement: true,
-        allowNull: false,
+/**
+ * DB columns are lowercase/snake where applicable. Sequelize attributes use camelCase
+ * and map via `field` — same pattern as `Provider`.
+ */
+const Customer = sequelize.define(
+  "Customer",
+  {
+    customerId: {
+      type: DataTypes.BIGINT,
+      primaryKey: true,
+      autoIncrement: true,
+      allowNull: false,
+      field: "customerid",
     },
-    kyc : {
-        type: DataTypes.STRING,
-        allowNull: true,
+    kyc: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
-    alternateno: {
-        type: DataTypes.BIGINT,
-        allowNull: true,
+    alternateNo: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      field: "alternateno",
     },
-    buildingname: {
-        type: DataTypes.STRING,
-        allowNull: true,
+    buildingName: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "buildingname",
     },
-    currentlocation: {
-        type: DataTypes.STRING,
-        allowNull: true,
+    currentLocation: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "currentlocation",
     },
-    emailid: {
-        type: DataTypes.STRING,
-        allowNull: false,
-        unique: true,
-        validate: {
-            isEmail: true,
-        },
+    emailId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      field: "emailid",
+      unique: true,
+      validate: {
+        isEmail: true,
+      },
     },
-    enrolleddate: {
-        type: DataTypes.DATE,
-        allowNull: true,
-        defaultValue: DataTypes.NOW,
+    enrolledDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: DataTypes.NOW,
+      field: "enrolleddate",
     },
-    firstname: {
-        type: DataTypes.STRING,
-        allowNull: false,
+    firstName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      field: "firstname",
     },
-    idno: {
-        type: DataTypes.STRING,
-        allowNull: true,
+    gender: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
-    isactive: {
-        type: DataTypes.BOOLEAN,
-        allowNull: false,
-        defaultValue: true,
+    idNo: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "idno",
     },
-    languageknown: {
-        type: DataTypes.STRING,
-        allowNull: true,
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: "isactive",
     },
-    lastname: {
-        type: DataTypes.STRING,
-        allowNull: false,
+    languageKnown: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "languageknown",
+    },
+    lastName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      field: "lastname",
     },
     locality: {
-        type: DataTypes.STRING,
-        allowNull: true,
+      type: DataTypes.STRING,
+      allowNull: true,
     },
-    middlename: {
-        type: DataTypes.STRING,
-        allowNull: true,
+    middleName: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "middlename",
     },
-    mobileno: {
-        type: DataTypes.BIGINT,
-        allowNull: true,
+    mobileNo: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      field: "mobileno",
     },
-    pincode: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
+    pinCode: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: "pincode",
     },
-    profilepic: {
-        type: DataTypes.STRING,
-        allowNull: true,
+    profilePic: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "profilepic",
     },
     rating: {
-        type: DataTypes.DOUBLE,
-        allowNull: false,
-        defaultValue: 0,
-        validate: {
-            min: 0,
-            max: 5,
-        },
+      type: DataTypes.DOUBLE,
+      allowNull: false,
+      defaultValue: 0,
+      validate: {
+        min: 0,
+        max: 5,
+      },
     },
     speciality: {
-        type: DataTypes.STRING,
-        allowNull: true,
+      type: DataTypes.STRING,
+      allowNull: true,
     },
     street: {
-        type: DataTypes.STRING,
-        allowNull: true,
+      type: DataTypes.STRING,
+      allowNull: true,
     },
-},{
+  },
+  {
     tableName: "customer",
     timestamps: false,
     underscored: false,
-});
+  }
+);
 
 export default Customer;

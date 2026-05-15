@@ -149,6 +149,99 @@ const statements = [
        EXECUTE 'UPDATE public.serviceprovider SET keyfacts = COALESCE(keyfacts, "keyFacts") WHERE "keyFacts" IS NOT NULL';
        EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "keyFacts"';
      END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='pinCode') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET pincode = COALESCE(pincode, "pinCode") WHERE "pinCode" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "pinCode"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='profilePic') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET profilepic = COALESCE(profilepic, "profilePic") WHERE "profilePic" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "profilePic"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='isActive') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET isactive = COALESCE(isactive, "isActive") WHERE "isActive" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "isActive"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='serviceprovider' AND column_name='enrolledDate') THEN
+       EXECUTE 'UPDATE public.serviceprovider SET enrolleddate = COALESCE(enrolleddate, "enrolledDate") WHERE "enrolledDate" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.serviceprovider DROP COLUMN IF EXISTS "enrolledDate"';
+     END IF;
+   END $$`,
+
+  // Customer: ensure canonical lowercase columns exist, then fold legacy camelCase into them.
+  `ALTER TABLE public.customer
+     ADD COLUMN IF NOT EXISTS firstname varchar(255),
+     ADD COLUMN IF NOT EXISTS lastname varchar(255),
+     ADD COLUMN IF NOT EXISTS middlename varchar(255),
+     ADD COLUMN IF NOT EXISTS emailid varchar(255),
+     ADD COLUMN IF NOT EXISTS mobileno bigint,
+     ADD COLUMN IF NOT EXISTS alternateno bigint,
+     ADD COLUMN IF NOT EXISTS buildingname varchar(255),
+     ADD COLUMN IF NOT EXISTS currentlocation varchar(255),
+     ADD COLUMN IF NOT EXISTS languageknown varchar(255),
+     ADD COLUMN IF NOT EXISTS enrolleddate timestamp,
+     ADD COLUMN IF NOT EXISTS pincode integer,
+     ADD COLUMN IF NOT EXISTS profilepic varchar(255),
+     ADD COLUMN IF NOT EXISTS isactive boolean NOT NULL DEFAULT true,
+     ADD COLUMN IF NOT EXISTS idno varchar(255),
+     ADD COLUMN IF NOT EXISTS gender varchar(255)`,
+  `DO $$
+   BEGIN
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='firstName') THEN
+       EXECUTE 'UPDATE public.customer SET firstname = COALESCE(firstname, "firstName") WHERE "firstName" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "firstName"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='lastName') THEN
+       EXECUTE 'UPDATE public.customer SET lastname = COALESCE(lastname, "lastName") WHERE "lastName" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "lastName"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='middleName') THEN
+       EXECUTE 'UPDATE public.customer SET middlename = COALESCE(middlename, "middleName") WHERE "middleName" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "middleName"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='emailId') THEN
+       EXECUTE 'UPDATE public.customer SET emailid = COALESCE(emailid, "emailId") WHERE "emailId" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "emailId"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='mobileNo') THEN
+       EXECUTE 'UPDATE public.customer SET mobileno = COALESCE(mobileno, "mobileNo") WHERE "mobileNo" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "mobileNo"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='alternateNo') THEN
+       EXECUTE 'UPDATE public.customer SET alternateno = COALESCE(alternateno, "alternateNo") WHERE "alternateNo" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "alternateNo"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='buildingName') THEN
+       EXECUTE 'UPDATE public.customer SET buildingname = COALESCE(buildingname, "buildingName") WHERE "buildingName" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "buildingName"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='currentLocation') THEN
+       EXECUTE 'UPDATE public.customer SET currentlocation = COALESCE(currentlocation, "currentLocation") WHERE "currentLocation" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "currentLocation"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='languageKnown') THEN
+       EXECUTE 'UPDATE public.customer SET languageknown = COALESCE(languageknown, "languageKnown") WHERE "languageKnown" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "languageKnown"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='enrolledDate') THEN
+       EXECUTE 'UPDATE public.customer SET enrolleddate = COALESCE(enrolleddate, "enrolledDate") WHERE "enrolledDate" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "enrolledDate"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='pinCode') THEN
+       EXECUTE 'UPDATE public.customer SET pincode = COALESCE(pincode, "pinCode") WHERE "pinCode" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "pinCode"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='profilePic') THEN
+       EXECUTE 'UPDATE public.customer SET profilepic = COALESCE(profilepic, "profilePic") WHERE "profilePic" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "profilePic"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='isActive') THEN
+       EXECUTE 'UPDATE public.customer SET isactive = COALESCE(isactive, "isActive") WHERE "isActive" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "isActive"';
+     END IF;
+     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='customer' AND column_name='idNo') THEN
+       EXECUTE 'UPDATE public.customer SET idno = COALESCE(idno, "idNo") WHERE "idNo" IS NOT NULL';
+       EXECUTE 'ALTER TABLE public.customer DROP COLUMN IF EXISTS "idNo"';
+     END IF;
    END $$`,
 
   // Remove restrictive language check for flexible payloads

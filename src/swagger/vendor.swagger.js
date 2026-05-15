@@ -224,7 +224,7 @@
  *                       items:
  *                         type: object
  *                         properties:
- *                           serviceproviderid:
+ *                           serviceProviderId:
  *                             type: integer
  *                             format: int64
  *                             example: 3552

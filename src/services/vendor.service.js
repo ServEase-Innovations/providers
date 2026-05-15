@@ -15,14 +15,14 @@ export const getVendorByIdService = async (vendorId) => {
         model: Provider,
         as: "serviceProviders",
         attributes: [
-          "serviceproviderid",
+          "serviceProviderId",
           "firstName",
           "lastName",
           "mobileNo",
           "emailId",
           "housekeepingRole",
-          "experience"
-        ]
+          "experience",
+        ],
       }
     ]
   });

@@ -4,6 +4,57 @@ import Address from "../model/address.model.js";
 import { sequelize } from "../config/database.js";
 import ProviderWeeklySlot from "../model/providerWeeklySlot.model.js";
 import ServiceProviderRole from "../model/serviceProviderRole.model.js";
+import { languageKnownToDb } from "../utils/languageKnown.util.js";
+
+/** Accept legacy lowercase / snake_case keys; Sequelize uses camelCase attributes. */
+function normalizeProviderPayload(data) {
+  if (!data || typeof data !== "object") return data;
+  const o = { ...data };
+  const alias = [
+    ["serviceproviderid", "serviceProviderId"],
+    ["firstname", "firstName"],
+    ["lastname", "lastName"],
+    ["middlename", "middleName"],
+    ["emailid", "emailId"],
+    ["mobileno", "mobileNo"],
+    ["alternateno", "alternateNo"],
+    ["buildingname", "buildingName"],
+    ["currentlocation", "currentLocation"],
+    ["languageknown", "languageKnown"],
+    ["nearbylocation", "nearbyLocation"],
+    ["housekeepingrole", "housekeepingRole"],
+    ["cookingspeciality", "cookingSpeciality"],
+    ["vendorid", "vendorId"],
+    ["profilepic", "profilePic"],
+    ["pincode", "pinCode"],
+    ["idno", "idNo"],
+    ["isactive", "isActive"],
+    ["enrolleddate", "enrolledDate"],
+    ["correspondence_address_id", "correspondenceAddressId"],
+    ["permanent_address_id", "permanentAddressId"],
+    ["nannycaretypes", "nannyCareType"],
+    ["keyfacts", "keyFacts"],
+    ["ifsccode", "ifscCode"],
+    ["bankname", "bankName"],
+    ["accountholdername", "accountHolderName"],
+    ["accountnumber", "accountNumber"],
+    ["accounttype", "accountType"],
+    ["upiid", "upiId"],
+    ["kyctype", "kycType"],
+    ["kycnumber", "kycNumber"],
+    ["kycimage", "kycImage"],
+  ];
+  for (const [legacy, canonical] of alias) {
+    if (o[canonical] === undefined && o[legacy] !== undefined) {
+      o[canonical] = o[legacy];
+    }
+    delete o[legacy];
+  }
+  if (o.languageKnown !== undefined) {
+    o.languageKnown = languageKnownToDb(o.languageKnown);
+  }
+  return o;
+}
 
 /** `nannyCareType`: free-form string codes; stored comma-separated in DB. */
 function normalizeNannyCareTypesForDb(val) {
@@ -26,7 +77,7 @@ function normalizeNannyCareTypesForDb(val) {
 
 export const getPaginatedProvidersService = async (limit, offset) => {
     return await Provider.findAndCountAll({
-        order: [['serviceproviderid', 'DESC']],
+        order: [["serviceProviderId", "DESC"]],
         limit,
         offset,
     });
@@ -39,7 +90,7 @@ export const getAllProvidersService = async () => {
 export const getProvidersByVendorIdService = async (vendorId) => {
   return await Provider.findAll({
     where: { vendorId },
-    order: [["serviceproviderid", "DESC"]],
+    order: [["serviceProviderId", "DESC"]],
   });
 };
 
@@ -93,7 +144,7 @@ async function replaceProviderSlotTables(
   transaction
 ) {
   await ProviderWeeklySlot.destroy({
-    where: { serviceproviderid },
+    where: { serviceProviderId: serviceproviderid },
     transaction,
   });
 
@@ -108,7 +159,7 @@ async function replaceProviderSlotTables(
   }
 
   const slotRows = finalWeeklySlots.map((slot) => ({
-    serviceproviderid,
+    serviceProviderId: serviceproviderid,
     dayOfWeek: slot.dayOfWeek,
     slotStart: slot.start,
     slotEnd: slot.end,
@@ -160,6 +211,8 @@ export const addProviderService = async (providerData) => {
       ...serviceproviderdata
     } = providerData;
 
+    const spRow = normalizeProviderPayload(serviceproviderdata);
+
     const resolvedRoles = resolveHousekeepingRoles(providerData);
 
     // 1️⃣ Create addresses only when payload includes them
@@ -176,31 +229,29 @@ export const addProviderService = async (providerData) => {
     // 2️⃣ Create provider FIRST
     const provider = await Provider.create(
       {
-        ...serviceproviderdata,
+        ...spRow,
         housekeepingRole: resolvedRoles[0] ?? null,
         // Persist raw timeslot string on provider row as well
         timeslot: providerData.timeslot,
-        permanent_address_id: permanent?.id ?? null,
+        permanentAddressId: permanent?.id ?? null,
         kycType: providerData.kycType,
-    kycNumber: providerData.kycNumber,
-    kycImage: providerData.kycImage || null,
-        correspondence_address_id: correspondence?.id ?? null,
-        languageKnown: Array.isArray(languages)
-  ? languages.join(",")
-  : languages,
+        kycNumber: providerData.kycNumber,
+        kycImage: providerData.kycImage || null,
+        correspondenceAddressId: correspondence?.id ?? null,
+        languageKnown: languageKnownToDb(
+          languages !== undefined ? languages : spRow.languageKnown
+        ),
         ...(nannyCareType !== undefined && {
           nannyCareType: normalizeNannyCareTypesForDb(nannyCareType),
         }),
-        vendorId: agentReferralId
-      ? Number(agentReferralId)
-      : null
+        vendorId: agentReferralId ? Number(agentReferralId) : null,
       },
       { transaction }
     );
 
     const finalWeeklySlots = resolveFinalWeeklySlots({ weeklySlots, timeslot });
     await replaceProviderSlotTables(
-      provider.serviceproviderid,
+      provider.serviceProviderId,
       finalWeeklySlots,
       transaction
     );
@@ -208,7 +259,7 @@ export const addProviderService = async (providerData) => {
     if (resolvedRoles.length > 0) {
       await ServiceProviderRole.bulkCreate(
         resolvedRoles.map((role) => ({
-          serviceproviderid: provider.serviceproviderid,
+          serviceProviderId: provider.serviceProviderId,
           role,
         })),
         { transaction }
@@ -252,8 +303,10 @@ export const updateProviderService = async (serviceproviderid, providerData) => 
     timeslot,
     languages,
     agentReferralId,
-    ...providerFields
+    ...providerFieldsRest
   } = providerData;
+
+  const providerFields = normalizeProviderPayload(providerFieldsRest);
 
   if (nannyCareType !== undefined) {
     providerFields.nannyCareType = normalizeNannyCareTypesForDb(nannyCareType);
@@ -262,9 +315,7 @@ export const updateProviderService = async (serviceproviderid, providerData) => 
     providerFields.timeslot = timeslot;
   }
   if (languages !== undefined) {
-    providerFields.languageKnown = Array.isArray(languages)
-      ? languages.join(",")
-      : languages;
+    providerFields.languageKnown = languageKnownToDb(languages);
   }
   if (agentReferralId !== undefined) {
     providerFields.vendorId = agentReferralId ? Number(agentReferralId) : null;
@@ -276,7 +327,7 @@ export const updateProviderService = async (serviceproviderid, providerData) => 
     ? resolveFinalWeeklySlots({ weeklySlots, timeslot })
     : null;
 
-  const sid = provider.serviceproviderid;
+  const sid = provider.serviceProviderId;
 
   if (Array.isArray(housekeepingRoles)) {
     const t = await sequelize.transaction();
@@ -297,12 +348,12 @@ export const updateProviderService = async (serviceproviderid, providerData) => 
         await replaceProviderSlotTables(sid, finalWeeklySlotsForRefresh, t);
       }
       await ServiceProviderRole.destroy({
-        where: { serviceproviderid: sid },
+        where: { serviceProviderId: sid },
         transaction: t,
       });
       if (roles.length > 0) {
         await ServiceProviderRole.bulkCreate(
-          roles.map((role) => ({ serviceproviderid: sid, role })),
+          roles.map((role) => ({ serviceProviderId: sid, role })),
           { transaction: t }
         );
       }

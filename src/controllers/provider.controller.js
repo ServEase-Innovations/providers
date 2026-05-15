@@ -10,6 +10,7 @@ import { getPagination, getPagingData } from "../utils/pagination.util.js";
 import responseHandling from "../utils/response.util.js";
 import Address from "../model/address.model.js";
 import ServiceProviderRole from "../model/serviceProviderRole.model.js"; // ✅ added import
+import { languageKnownToArray } from "../utils/languageKnown.util.js";
 
 const attachAddresses = async (provider) => {
   const raw = provider?.toJSON ? provider.toJSON() : provider;
@@ -17,22 +18,23 @@ const attachAddresses = async (provider) => {
 
   // Fetch addresses
   const [correspondenceAddress, permanentAddress] = await Promise.all([
-    raw.correspondence_address_id
-      ? Address.findByPk(raw.correspondence_address_id)
+    raw.correspondenceAddressId
+      ? Address.findByPk(raw.correspondenceAddressId)
       : null,
-    raw.permanent_address_id ? Address.findByPk(raw.permanent_address_id) : null,
+    raw.permanentAddressId ? Address.findByPk(raw.permanentAddressId) : null,
   ]);
 
   // ✅ Fetch roles for this provider
   const roles = await ServiceProviderRole.findAll({
-    where: { serviceproviderid: raw.serviceproviderid },
-    attributes: ['role'],
+    where: { serviceProviderId: raw.serviceProviderId },
+    attributes: ["role"],
     raw: true,
   });
   const housekeepingRoles = roles.map(r => r.role);
 
   const result = {
     ...raw,
+    languageKnown: languageKnownToArray(raw.languageKnown),
     correspondenceAddress: correspondenceAddress
       ? correspondenceAddress.toJSON()
       : null,
@@ -41,8 +43,8 @@ const attachAddresses = async (provider) => {
   };
 
   // Hide FK fields from API response (still exist in DB)
-  delete result.correspondence_address_id;
-  delete result.permanent_address_id;
+  delete result.correspondenceAddressId;
+  delete result.permanentAddressId;
 
   return result;
 };
@@ -112,11 +114,12 @@ export const updateProvider = async (req, res, next) => {
       return responseHandling(res, 404, "Provider not found");
     }
 
+    const hydrated = await attachAddresses(updatedProvider);
     return responseHandling(
       res,
       200,
       "Provider updated successfully",
-      updatedProvider
+      hydrated
     );
   } catch (error) {
     next(error);

@@ -19,23 +19,23 @@ async function q(sql, replacements, transaction, optionalTable) {
  * Uses optional SQL for tables that may not exist in every environment.
  */
 export async function deleteProviderCascade(rawId) {
-  const serviceproviderid = Number(rawId);
-  if (!Number.isFinite(serviceproviderid) || serviceproviderid <= 0) {
+  const serviceProviderId = Number(rawId);
+  if (!Number.isFinite(serviceProviderId) || serviceProviderId <= 0) {
     const err = new Error("Invalid service provider id");
     err.statusCode = 400;
     throw err;
   }
 
-  const provider = await Provider.findByPk(serviceproviderid);
+  const provider = await Provider.findByPk(serviceProviderId);
   if (!provider) {
     return null;
   }
 
-  const corr = provider.get("correspondence_address_id");
-  const perm = provider.get("permanent_address_id");
+  const corr = provider.get("correspondenceAddressId");
+  const perm = provider.get("permanentAddressId");
   const addressIds = [...new Set([corr, perm].filter((x) => x != null))];
 
-  const pid = { pid: serviceproviderid };
+  const pid = { pid: serviceProviderId };
 
   const transaction = await sequelize.transaction();
 
@@ -238,12 +238,12 @@ export async function deleteProviderCascade(rawId) {
     );
 
     await ServiceProviderRole.destroy({
-      where: { serviceproviderid },
+      where: { serviceProviderId },
       transaction,
     });
 
     await ProviderWeeklySlot.destroy({
-      where: { serviceproviderid },
+      where: { serviceProviderId },
       transaction,
     });
 
@@ -253,7 +253,7 @@ export async function deleteProviderCascade(rawId) {
     });
 
     await Provider.destroy({
-      where: { serviceproviderid },
+      where: { serviceProviderId },
       transaction,
     });
 
@@ -265,7 +265,7 @@ export async function deleteProviderCascade(rawId) {
     }
 
     await transaction.commit();
-    return { serviceproviderid, deletedAddressIds: addressIds };
+    return { serviceProviderId, deletedAddressIds: addressIds };
   } catch (e) {
     await transaction.rollback();
     throw e;

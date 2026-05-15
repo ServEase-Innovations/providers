@@ -2,6 +2,7 @@ import crypto from "crypto";
 import Customer from "../model/customer.model.js";
 import Provider from "../model/provider.model.js";
 import { clearOtpSession, getOtpSession, setOtpSession } from "./otp.store.js";
+import { languageKnownToArray } from "../utils/languageKnown.util.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const RESEND_INTERVAL_MS = 30 * 1000;
@@ -89,7 +90,7 @@ export const sendOtpService = async (mobileInput) => {
   }
 
   const [customer, serviceProvider] = await Promise.all([
-    Customer.findOne({ where: { mobileno: mobile } }),
+    Customer.findOne({ where: { mobileNo: mobile } }),
     Provider.findOne({ where: { mobileNo: mobile } }),
   ]);
   if (!customer && !serviceProvider) {
@@ -102,8 +103,8 @@ export const sendOtpService = async (mobileInput) => {
 
   const subjectType = serviceProvider ? "SERVICE_PROVIDER" : "CUSTOMER";
   const subjectId = serviceProvider
-    ? serviceProvider.serviceproviderid
-    : customer.customerid;
+    ? serviceProvider.serviceProviderId
+    : customer.customerId;
 
   const existingSession = getOtpSession(mobile);
   if (
@@ -178,26 +179,53 @@ export const verifyOtpService = async ({ mobile: mobileInput, otp }) => {
   if (session.subjectType === "SERVICE_PROVIDER") {
     const serviceProvider = await Provider.findByPk(session.subjectId, {
       attributes: [
-        "serviceproviderid",
+        "serviceProviderId",
         "firstName",
         "lastName",
         "emailId",
         "mobileNo",
+        /** Profile fields used by apps after login (omit bank/KYC from this bootstrap query). */
+        "languageKnown",
+        "alternateNo",
+        "profilePic",
+        "vendorId",
+        "isActive",
       ],
     });
+    const spJson = serviceProvider?.toJSON?.() ?? serviceProvider;
+    const serviceProviderOut = spJson
+      ? {
+          ...spJson,
+          languageKnown: languageKnownToArray(spJson.languageKnown),
+        }
+      : null;
     data = {
       role: "SERVICE_PROVIDER",
-      serviceProviderId: serviceProvider?.serviceproviderid ?? null,
-      serviceProvider,
+      serviceProviderId: serviceProviderOut?.serviceProviderId ?? null,
+      serviceProvider: serviceProviderOut,
     };
   } else {
     const customer = await Customer.findByPk(session.subjectId, {
-      attributes: ["customerid", "firstname", "lastname", "emailid", "mobileno"],
+      attributes: [
+        "customerId",
+        "firstName",
+        "lastName",
+        "emailId",
+        "mobileNo",
+        "languageKnown",
+      ],
     });
+    const custJson = customer?.toJSON?.() ?? customer;
+    const customerOut = custJson
+      ? {
+          ...custJson,
+          languageKnown: languageKnownToArray(custJson.languageKnown),
+        }
+      : null;
     data = {
       role: "CUSTOMER",
-      customerId: customer?.customerid ?? null,
-      customer,
+      customerId: customerOut?.customerId ?? null,
+      customer: customerOut,
     };
   }
 

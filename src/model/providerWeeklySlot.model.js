@@ -10,9 +10,10 @@ const ProviderWeeklySlot = sequelize.define(
       autoIncrement: true,
     },
 
-    serviceproviderid: {
+    serviceProviderId: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      field: "serviceproviderid",
     },
 
     dayOfWeek: {

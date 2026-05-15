@@ -3,6 +3,13 @@ import { getPagination, getPagingData } from "../utils/pagination.util.js";
 import responseHandling from "../utils/response.util.js";
 import { observeProviderAction } from "../monitoring/prometheus.js";
 import { logger } from "../utils/logger.js";
+import { languageKnownToArray } from "../utils/languageKnown.util.js";
+
+function customerToResponse(customer) {
+  const j = customer?.toJSON ? customer.toJSON() : customer;
+  if (!j) return j;
+  return { ...j, languageKnown: languageKnownToArray(j.languageKnown) };
+}
 
 
 export const getCustomerById = async (req, res, next) => {
@@ -15,7 +22,7 @@ export const getCustomerById = async (req, res, next) => {
             return responseHandling(res, 404, "Customer not found");
         }
         observeProviderAction({ action: "get_customer_by_id", result: "found" });
-        return responseHandling(res, 200, "Customer retrieved successfully", customer);
+        return responseHandling(res, 200, "Customer retrieved successfully", customerToResponse(customer));
         
     } catch (error) {
         observeProviderAction({ action: "get_customer_by_id", result: "error" });
@@ -27,12 +34,14 @@ export const getPaginatedCustomers = async (req, res, next) => {
     try {
         if (!req.query.page || !req.query.size) {
             const customers = await getAllCustomersService();
-            return responseHandling(res, 200, "All customers retrieved successfully", customers);
+            const formatted = customers.map((c) => customerToResponse(c));
+            return responseHandling(res, 200, "All customers retrieved successfully", formatted);
         }
         const { page, size } = req.query;
         const { limit, offset } = getPagination(page, size);
         const data = await getPaginatedCustomersService(limit, offset);
         const response = getPagingData(data, page, limit);
+        response.results = (response.results || []).map((c) => customerToResponse(c));
         observeProviderAction({ action: "get_paginated_customers", result: "success" });
         return responseHandling(res, 200, "Customers retrieved successfully", response);
     } catch (error) {
@@ -52,7 +61,7 @@ export const createCustomer = async (req, res, next) => {
             res,
             201,
             "Customer created successfully",
-            customer
+            customerToResponse(customer)
         );
     } catch (error) {
         observeProviderAction({ action: "create_customer", result: "error" });
@@ -77,7 +86,7 @@ export const updateCustomer = async (req, res, next) => {
       res,
       200,
       "Customer updated successfully",
-      updatedCustomer
+      customerToResponse(updatedCustomer)
     );
   } catch (error) {
     observeProviderAction({ action: "update_customer", result: "error" });

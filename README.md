@@ -84,7 +84,7 @@ If you use `docker run` instead of Compose, replace the remote commands in the w
 |--------|------|-------------|
 | `GET` | `/providers` | Paginated or full list of providers (hydrated with addresses where applicable) |
 | `GET` | `/serviceprovider/:id` | Provider by `serviceproviderid` + addresses |
-| `POST` | `/serviceprovider/add` | Create provider: addresses, **`housekeepingRoles`** (required), optional `weeklySlots` or `timeslot`, `languages` → `languageKnown`, `nannyCareType`, KYC fields, `agentReferralId` → `vendorId`, etc. |
+| `POST` | `/serviceprovider/add` | Create provider: addresses, **`housekeepingRoles`** (required), optional `weeklySlots` or `timeslot`, `languages` or `languageKnown` (array or comma-separated string → stored as CSV in DB), `nannyCareType`, KYC fields, `agentReferralId` → `vendorId`, etc. |
 | `PUT` | `/serviceprovider/:id` | Update provider; optional `housekeepingRoles` replaces `serviceprovider_roles`; `timeslot` / `weeklySlots` rebuild weekly + daily slot tables; `languages` / `agentReferralId` mapped like create |
 | `GET` | `/nearby` | Date/time-aware nearby search (query params: `lat`, `lng`, `date`, `startTime`, `role`, optional `radius`) |
 | `POST` | `/nearby-monthly` | Body: geo, `role`, `radius`, `startDate` / `endDate`, `preferredStartTime`, `serviceDurationMinutes`, optional pagination (`page`, `limit`), optional **`customerID`** (positive integer only — `0` is ignored). Returns per-provider monthly summary, booking-sourced debug counts, optional previous-booking flags |

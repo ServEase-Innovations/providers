@@ -14,14 +14,14 @@ Provider.belongsTo(Vendor, {
 });
 
 Provider.hasMany(ServiceProviderRole, {
-  foreignKey: "serviceproviderid",
-  sourceKey: "serviceproviderid",
+  foreignKey: "serviceProviderId",
+  sourceKey: "serviceProviderId",
   as: "roles",
 });
 
 ServiceProviderRole.belongsTo(Provider, {
-  foreignKey: "serviceproviderid",
-  targetKey: "serviceproviderid",
+  foreignKey: "serviceProviderId",
+  targetKey: "serviceProviderId",
 });
 
 // Export all models

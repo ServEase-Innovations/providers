@@ -5,19 +5,19 @@
  *     ServiceProvider:
  *       type: object
  *       properties:
- *         serviceproviderid:
+ *         serviceProviderId:
  *           type: integer
  *           example: 3552
  *         firstName:
  *           type: string
  *           example: Saurav
- *         lastname:
+ *         lastName:
  *           type: string
  *           example: Dey
  *         gender:
  *           type: string
  *           example: MALE
- *         housekeepingrole:
+ *         housekeepingRole:
  *           type: string
  *           example: COOK
  *         latitude:
@@ -31,7 +31,7 @@
  *         timeslot:
  *           type: string
  *           example: "06:00-20:00"
- *         distance_km:
+ *         distanceKm:
  *           type: number
  *           format: float
  *           example: 0.8
