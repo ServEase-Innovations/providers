@@ -7,6 +7,22 @@ import {
 import { getProvidersByVendorIdService } from "../services/provider.service.js";
 import responseHandling from "../utils/response.util.js";
 
+/** Align Sequelize camelCase with legacy admin / agent UI field names. */
+function formatProviderForLegacyUi(provider) {
+  const raw = provider?.toJSON ? provider.toJSON() : provider;
+  if (!raw) return raw;
+  return {
+    ...raw,
+    serviceproviderid: raw.serviceProviderId ?? raw.serviceproviderid,
+    isactive:
+      raw.isActive !== undefined && raw.isActive !== null
+        ? Boolean(raw.isActive)
+        : raw.isactive !== undefined && raw.isactive !== null
+          ? Boolean(raw.isactive)
+          : true,
+  };
+}
+
 export const addVendor = async (req, res, next) => {
   try {
     const vendorData = req.body;
@@ -39,7 +55,7 @@ export const getVendorById = async (req, res, next) => {
 
     return responseHandling(res, 200, "Vendor fetched successfully", {
       ...vendor.toJSON(),
-      providers,
+      providers: providers.map(formatProviderForLegacyUi),
     });
   } catch (error) {
     next(error);

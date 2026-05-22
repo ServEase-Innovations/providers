@@ -34,6 +34,14 @@ const attachAddresses = async (provider) => {
 
   const result = {
     ...raw,
+    // Legacy UI / admin grids expect snake-case id + isactive
+    serviceproviderid: raw.serviceProviderId ?? raw.serviceproviderid,
+    isactive:
+      raw.isActive !== undefined && raw.isActive !== null
+        ? Boolean(raw.isActive)
+        : raw.isactive !== undefined && raw.isactive !== null
+          ? Boolean(raw.isactive)
+          : true,
     languageKnown: languageKnownToArray(raw.languageKnown),
     correspondenceAddress: correspondenceAddress
       ? correspondenceAddress.toJSON()
