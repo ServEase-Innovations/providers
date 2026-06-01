@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS serviceprovider_roles (
 );
 
 INSERT INTO serviceprovider_roles (serviceproviderid, role)
-SELECT "serviceproviderid", TRIM("housekeepingRole"::text)
-FROM "serviceprovider"
-WHERE "housekeepingRole" IS NOT NULL AND TRIM("housekeepingRole"::text) <> ''
+SELECT serviceproviderid, TRIM(housekeepingrole::text)
+FROM serviceprovider
+WHERE housekeepingrole IS NOT NULL AND TRIM(housekeepingrole::text) <> ''
 ON CONFLICT DO NOTHING;
