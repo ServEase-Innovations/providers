@@ -27,7 +27,7 @@ const pgUser = process.env.DB_USER || process.env.TARGET_DB_USER || "serveaso";
 const pgPassword =
   process.env.DB_PASSWORD || process.env.TARGET_DB_PASSWORD || "serveaso";
 const pgDatabase =
-  process.env.DB_NAME || process.env.TARGET_DB_NAME || "serveaso";
+  process.env.DB_NAME || process.env.TARGET_DB_NAME || process.env.POSTGRES_DB;
 
 const pool = new Pool({
   host: pgHost,
