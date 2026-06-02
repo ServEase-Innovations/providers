@@ -12,6 +12,12 @@ import Address from "../model/address.model.js";
 import ServiceProviderRole from "../model/serviceProviderRole.model.js"; // ✅ added import
 import { languageKnownToArray } from "../utils/languageKnown.util.js";
 
+function toEpochOrNull(value) {
+  if (!value) return null;
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? Math.floor(t / 1000) : null;
+}
+
 const attachAddresses = async (provider) => {
   const raw = provider?.toJSON ? provider.toJSON() : provider;
   if (!raw) return raw;
@@ -43,6 +49,8 @@ const attachAddresses = async (provider) => {
           ? Boolean(raw.isactive)
           : true,
     languageKnown: languageKnownToArray(raw.languageKnown),
+    dob_epoch: toEpochOrNull(raw.dob),
+    enrolled_date_epoch: toEpochOrNull(raw.enrolledDate),
     correspondenceAddress: correspondenceAddress
       ? correspondenceAddress.toJSON()
       : null,

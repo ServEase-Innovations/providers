@@ -48,6 +48,23 @@ function toEpoch(date, time) {
   return epochInIST(date, time);
 }
 
+function toFiniteEpoch(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+function ymdFromEpoch(epochSeconds) {
+  const ep = toFiniteEpoch(epochSeconds);
+  if (ep == null) return null;
+  return dayjs.unix(ep).tz("Asia/Kolkata").format("YYYY-MM-DD");
+}
+
+function hhmmFromEpoch(epochSeconds) {
+  const ep = toFiniteEpoch(epochSeconds);
+  if (ep == null) return null;
+  return dayjs.unix(ep).tz("Asia/Kolkata").format("HH:mm");
+}
+
 // Generate hourly availability for a date
 function generateHourlyAvailability(timeslot, bookedSlots, date) {
   if (!timeslot) return [];
@@ -64,7 +81,7 @@ function generateHourlyAvailability(timeslot, bookedSlots, date) {
   const available = [];
 
   for (let hour = startH; hour < endH; hour++) {
-    const epoch = epochInIST(dateStr, `${String(h).padStart(2,"0")}:00`);
+    const epoch = epochInIST(date, `${String(hour).padStart(2, "0")}:00`);
     const blocked = bookedSlots.some(
       b => epoch < b.end && epoch + 3600 > b.start
     );
@@ -437,9 +454,20 @@ WHERE
 
 router.get("/nearby", async (req, res) => {
   try {
-    let { lat, lng, date, startTime, role, radius = 10 } = req.query;
+    let {
+      lat,
+      lng,
+      date,
+      date_epoch,
+      startTime,
+      start_epoch,
+      role,
+      radius = 10,
+    } = req.query;
+    const resolvedDate = date || ymdFromEpoch(date_epoch);
+    const resolvedStartTime = startTime || hhmmFromEpoch(start_epoch);
 
-    if (!lat || !lng || !date || !startTime || !role) {
+    if (!lat || !lng || !resolvedDate || !resolvedStartTime || !role) {
       return res.status(400).json({ message: "Missing required params" });
     }
 
@@ -451,9 +479,9 @@ router.get("/nearby", async (req, res) => {
       [lat, lng] = [lng, lat];
     }
 
-    const startEpoch = toEpoch(date, startTime);
+    const startEpoch = toEpoch(resolvedDate, resolvedStartTime);
 
-    const values = [lat, lng, role, date, startEpoch, Number(radius)];
+    const values = [lat, lng, role, resolvedDate, startEpoch, Number(radius)];
 
     const { rows } = await pool.query(SQL_QUERY, values);
 
@@ -484,6 +512,7 @@ router.get("/nearby", async (req, res) => {
       distanceKm: p.distance_km != null ? Number(p.distance_km.toFixed(2)) : null,
 
       availableNow: p.available_now,
+      nextAvailableEpoch: p.next_available_epoch ? Number(p.next_available_epoch) : null,
       nextAvailableAt:
         p.available_now || !p.next_available_epoch
           ? null
@@ -494,7 +523,7 @@ router.get("/nearby", async (req, res) => {
       availableTimes: generateHourlyAvailability(
         p.timeslot,
         p.booked_slots,
-        date
+        resolvedDate
       ),
     }));
 
@@ -789,11 +818,18 @@ router.post("/nearby-monthly", async (req, res) => {
       lng,
       role,
       radius = 10,
-      startDate,
-      endDate,
-      preferredStartTime,
+      startDate: startDateRaw,
+      endDate: endDateRaw,
+      start_date_epoch,
+      end_date_epoch,
+      preferredStartTime: preferredStartTimeRaw,
+      preferred_start_epoch,
       serviceDurationMinutes
     } = b;
+    const startDate = startDateRaw || ymdFromEpoch(start_date_epoch);
+    const endDate = endDateRaw || ymdFromEpoch(end_date_epoch);
+    const preferredStartTime =
+      preferredStartTimeRaw || hhmmFromEpoch(preferred_start_epoch);
     const customerID = b.customerID ?? q.customerID;
     const customerId = b.customerId ?? q.customerId;
 
@@ -1032,6 +1068,12 @@ AND (
           serviceType: row.serviceType,
           startDate: row.startDate,
           endDate: row.endDate,
+          startDateEpoch: row.startDate
+            ? dayjs.tz(row.startDate, "Asia/Kolkata").startOf("day").unix()
+            : null,
+          endDateEpoch: row.endDate
+            ? dayjs.tz(row.endDate, "Asia/Kolkata").endOf("day").unix()
+            : null,
           startEpoch: row.startEpoch != null ? Number(row.startEpoch) : null,
           durationMinutes:
             row.durationMinutes != null ? Number(row.durationMinutes) : null,
@@ -1042,7 +1084,10 @@ AND (
           taskStatus: row.taskStatus,
           active: row.active,
           baseAmount: row.baseAmount != null ? Number(row.baseAmount) : null,
-          createdAt: row.createdAt
+          createdAt: row.createdAt,
+          createdAtEpoch: row.createdAt
+            ? dayjs(row.createdAt).unix()
+            : null
         });
       }
     }
@@ -1632,12 +1677,14 @@ AND (
         const prev = previousBookingByProvider.get(pid);
         providerRow.previouslyBooked = !!prev;
         if (prev) {
-          const {
-            startEpoch: _se,
-            durationMinutes: _dm,
-            ...prevForApi
-          } = prev;
-          providerRow.previousBookingDetails = prevForApi;
+          providerRow.previousBookingDetails = {
+            ...prev,
+            start_epoch: prev.startEpoch,
+            duration_minutes: prev.durationMinutes,
+            start_date_epoch: prev.startDateEpoch,
+            end_date_epoch: prev.endDateEpoch,
+            created_at_epoch: prev.createdAtEpoch,
+          };
         }
       }
 

@@ -7,6 +7,12 @@ import {
 import { getProvidersByVendorIdService } from "../services/provider.service.js";
 import responseHandling from "../utils/response.util.js";
 
+function toEpochOrNull(value) {
+  if (!value) return null;
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? Math.floor(t / 1000) : null;
+}
+
 /** Align Sequelize camelCase with legacy admin / agent UI field names. */
 function formatProviderForLegacyUi(provider) {
   const raw = provider?.toJSON ? provider.toJSON() : provider;
@@ -20,6 +26,17 @@ function formatProviderForLegacyUi(provider) {
         : raw.isactive !== undefined && raw.isactive !== null
           ? Boolean(raw.isactive)
           : true,
+    dob_epoch: toEpochOrNull(raw.dob),
+    enrolled_date_epoch: toEpochOrNull(raw.enrolledDate),
+  };
+}
+
+function formatVendorWithEpoch(vendor) {
+  const raw = vendor?.toJSON ? vendor.toJSON() : vendor;
+  if (!raw) return raw;
+  return {
+    ...raw,
+    created_date_epoch: toEpochOrNull(raw.createdDate),
   };
 }
 
@@ -27,7 +44,12 @@ export const addVendor = async (req, res, next) => {
   try {
     const vendorData = req.body;
     const vendor = await addVendorService(vendorData);
-    return responseHandling(res, 201, "Vendor added successfully", vendor);
+    return responseHandling(
+      res,
+      201,
+      "Vendor added successfully",
+      formatVendorWithEpoch(vendor)
+    );
   } catch (error) {
     next(error);
   }
@@ -36,7 +58,12 @@ export const addVendor = async (req, res, next) => {
 export const getAllVendors = async (req, res, next) => {
   try {
     const vendors = await getAllVendorsService();
-    return responseHandling(res, 200, "Vendors fetched successfully", vendors);
+    return responseHandling(
+      res,
+      200,
+      "Vendors fetched successfully",
+      vendors.map(formatVendorWithEpoch)
+    );
   } catch (error) {
     next(error);
   }
@@ -54,7 +81,7 @@ export const getVendorById = async (req, res, next) => {
     const providers = await getProvidersByVendorIdService(vendor.vendorId);
 
     return responseHandling(res, 200, "Vendor fetched successfully", {
-      ...vendor.toJSON(),
+      ...formatVendorWithEpoch(vendor),
       providers: providers.map(formatProviderForLegacyUi),
     });
   } catch (error) {
@@ -72,7 +99,12 @@ export const updateVendor = async (req, res, next) => {
       return responseHandling(res, 404, "Vendor not found");
     }
 
-    return responseHandling(res, 200, "Vendor updated successfully", vendor);
+    return responseHandling(
+      res,
+      200,
+      "Vendor updated successfully",
+      formatVendorWithEpoch(vendor)
+    );
   } catch (error) {
     next(error);
   }

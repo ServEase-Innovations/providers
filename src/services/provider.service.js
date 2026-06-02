@@ -6,6 +6,12 @@ import ProviderWeeklySlot from "../model/providerWeeklySlot.model.js";
 import ServiceProviderRole from "../model/serviceProviderRole.model.js";
 import { languageKnownToDb } from "../utils/languageKnown.util.js";
 
+function toDateFromEpochSeconds(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return new Date(Math.floor(n) * 1000);
+}
+
 /** Accept legacy lowercase / snake_case keys; Sequelize uses camelCase attributes. */
 function normalizeProviderPayload(data) {
   if (!data || typeof data !== "object") return data;
@@ -53,6 +59,14 @@ function normalizeProviderPayload(data) {
   if (o.languageKnown !== undefined) {
     o.languageKnown = languageKnownToDb(o.languageKnown);
   }
+  if (o.dob === undefined && o.dob_epoch !== undefined) {
+    o.dob = toDateFromEpochSeconds(o.dob_epoch);
+  }
+  if (o.enrolledDate === undefined && o.enrolled_date_epoch !== undefined) {
+    o.enrolledDate = toDateFromEpochSeconds(o.enrolled_date_epoch);
+  }
+  delete o.dob_epoch;
+  delete o.enrolled_date_epoch;
   return o;
 }
 

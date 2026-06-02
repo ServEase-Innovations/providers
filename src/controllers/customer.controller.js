@@ -5,10 +5,20 @@ import { observeProviderAction } from "../monitoring/prometheus.js";
 import { logger } from "../utils/logger.js";
 import { languageKnownToArray } from "../utils/languageKnown.util.js";
 
+function toEpochOrNull(value) {
+  if (!value) return null;
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? Math.floor(t / 1000) : null;
+}
+
 function customerToResponse(customer) {
   const j = customer?.toJSON ? customer.toJSON() : customer;
   if (!j) return j;
-  return { ...j, languageKnown: languageKnownToArray(j.languageKnown) };
+  return {
+    ...j,
+    languageKnown: languageKnownToArray(j.languageKnown),
+    enrolled_date_epoch: toEpochOrNull(j.enrolledDate),
+  };
 }
 
 

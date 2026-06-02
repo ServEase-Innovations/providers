@@ -1,6 +1,12 @@
 import Customer from "../model/customer.model.js";
 import { languageKnownToDb } from "../utils/languageKnown.util.js";
 
+function toDateFromEpochSeconds(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return new Date(Math.floor(n) * 1000);
+}
+
 /** Accept legacy lowercase / snake_case keys; Sequelize uses camelCase attributes. */
 function normalizeCustomerPayload(data) {
   if (!data || typeof data !== "object") return data;
@@ -31,6 +37,10 @@ function normalizeCustomerPayload(data) {
   if (o.languageKnown !== undefined) {
     o.languageKnown = languageKnownToDb(o.languageKnown);
   }
+  if (o.enrolledDate === undefined && o.enrolled_date_epoch !== undefined) {
+    o.enrolledDate = toDateFromEpochSeconds(o.enrolled_date_epoch);
+  }
+  delete o.enrolled_date_epoch;
   return o;
 }
 

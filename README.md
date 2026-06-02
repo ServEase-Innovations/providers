@@ -120,6 +120,32 @@ Full request/response shapes are described in **Swagger** (`/api-docs`) and in J
 
 ---
 
+## Epoch-first contract (providers)
+
+Providers service now supports epoch-first inputs in discovery and core write paths while retaining legacy fields for compatibility.
+
+- `GET /api/service-providers/nearby`:
+  - legacy: `date`, `startTime`
+  - epoch aliases: `date_epoch`, `start_epoch`
+- `POST /api/service-providers/nearby-monthly`:
+  - legacy: `startDate`, `endDate`, `preferredStartTime`
+  - epoch aliases: `start_date_epoch`, `end_date_epoch`, `preferred_start_epoch`
+- Provider write payloads (`POST/PUT /api/service-providers/serviceprovider...`):
+  - `dob_epoch`, `enrolled_date_epoch`
+- Customer write payloads (`POST/PUT /api/customer...`):
+  - `enrolled_date_epoch`
+- Vendor write payloads (`POST/PUT /api/vendor...`):
+  - `created_date_epoch`
+
+Response mirrors now include epoch fields where relevant:
+
+- provider payloads: `dob_epoch`, `enrolled_date_epoch`
+- customer payloads: `enrolled_date_epoch`
+- vendor payloads: `created_date_epoch`
+- discovery payloads: existing `nextAvailableEpoch`, booking/date epoch mirrors in `previousBookingDetails` (nearby-monthly)
+
+---
+
 ## Database (ERP) and how tables connect
 
 The app uses **PostgreSQL** as the system of record. In platform terms this database behaves as the **ERP / operational datastore**: it holds master entities (vendors, providers, customers, addresses), provider capability and schedule data, and **booking / assignment** data used for availability and monthly search.
