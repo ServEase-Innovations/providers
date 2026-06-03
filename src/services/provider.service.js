@@ -35,6 +35,7 @@ function normalizeProviderPayload(data) {
     ["pincode", "pinCode"],
     ["idno", "idNo"],
     ["isactive", "isActive"],
+    ["active", "isActive"],
     ["enrolleddate", "enrolledDate"],
     ["correspondence_address_id", "correspondenceAddressId"],
     ["permanent_address_id", "permanentAddressId"],
@@ -228,6 +229,15 @@ export const addProviderService = async (providerData) => {
     const spRow = normalizeProviderPayload(serviceproviderdata);
 
     const resolvedRoles = resolveHousekeepingRoles(providerData);
+    if (resolvedRoles.length === 0) {
+      const err = new Error(
+        "At least one role is required (housekeepingRoles, serviceTypes, or housekeepingRole, e.g. COOK)"
+      );
+      err.status = 400;
+      err.statusCode = 400;
+      err.code = "ROLES_REQUIRED";
+      throw err;
+    }
 
     // 1️⃣ Create addresses only when payload includes them
     const correspondence =
@@ -290,16 +300,25 @@ export const addProviderService = async (providerData) => {
   }
 };
 
-/** Unique non-empty roles from housekeepingRoles[] only. */
+/** Unique non-empty roles from housekeepingRoles, serviceTypes, or legacy housekeepingRole. */
 function resolveHousekeepingRoles(providerData) {
-  if (!Array.isArray(providerData.housekeepingRoles)) return [];
-  return [
-    ...new Set(
-      providerData.housekeepingRoles
-        .map((r) => String(r).trim())
-        .filter(Boolean)
-    ),
-  ];
+  const raw = [];
+  const push = (val) => {
+    if (val == null) return;
+    if (Array.isArray(val)) {
+      for (const item of val) raw.push(item);
+      return;
+    }
+    const s = String(val).trim();
+    if (s) raw.push(s);
+  };
+
+  push(providerData.housekeepingRoles);
+  push(providerData.serviceTypes);
+  push(providerData.housekeepingRole);
+  push(providerData.role);
+
+  return [...new Set(raw.map((r) => String(r).trim().toUpperCase()).filter(Boolean))];
 }
 
 export const updateProviderService = async (serviceproviderid, providerData) => {
@@ -343,14 +362,25 @@ export const updateProviderService = async (serviceproviderid, providerData) => 
 
   const sid = provider.serviceProviderId;
 
-  if (Array.isArray(housekeepingRoles)) {
+  const rolesPayload =
+    housekeepingRoles !== undefined ||
+    providerData.serviceTypes !== undefined ||
+    providerData.housekeepingRole !== undefined ||
+    providerData.role !== undefined;
+
+  if (rolesPayload) {
     const t = await sequelize.transaction();
     try {
-      const roles = [
-        ...new Set(
-          housekeepingRoles.map((r) => String(r).trim()).filter(Boolean)
-        ),
-      ];
+      const roles = resolveHousekeepingRoles(providerData);
+      if (roles.length === 0) {
+        const err = new Error(
+          "At least one role is required (housekeepingRoles, serviceTypes, or housekeepingRole)"
+        );
+        err.status = 400;
+        err.statusCode = 400;
+        err.code = "ROLES_REQUIRED";
+        throw err;
+      }
       await provider.update(
         {
           ...providerFields,
