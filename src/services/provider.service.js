@@ -13,9 +13,20 @@ function toDateFromEpochSeconds(value) {
 }
 
 /** Accept legacy lowercase / snake_case keys; Sequelize uses camelCase attributes. */
+function normalizeLoginEmail(email) {
+  if (email == null || String(email).trim() === "") return null;
+  return String(email).trim().toLowerCase();
+}
+
 function normalizeProviderPayload(data) {
   if (!data || typeof data !== "object") return data;
   const o = { ...data };
+  if (o.emailId === undefined && o.email !== undefined) {
+    o.emailId = o.email;
+  }
+  if (o.emailId !== undefined) {
+    o.emailId = normalizeLoginEmail(o.emailId);
+  }
   const alias = [
     ["serviceproviderid", "serviceProviderId"],
     ["firstname", "firstName"],
@@ -227,6 +238,14 @@ export const addProviderService = async (providerData) => {
     } = providerData;
 
     const spRow = normalizeProviderPayload(serviceproviderdata);
+
+    if (!spRow.emailId) {
+      const err = new Error("emailId is required and must match your Auth0 login email");
+      err.status = 400;
+      err.statusCode = 400;
+      err.code = "EMAIL_REQUIRED";
+      throw err;
+    }
 
     const resolvedRoles = resolveHousekeepingRoles(providerData);
     if (resolvedRoles.length === 0) {

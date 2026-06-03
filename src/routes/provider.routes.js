@@ -1752,15 +1752,16 @@ router.post("/check-email", async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
+    const normalized = String(email).trim().toLowerCase();
     const result = await pool.query(
   `
   SELECT
-    EXISTS (SELECT 1 FROM customer WHERE "emailid" = $1)
+    EXISTS (SELECT 1 FROM customer WHERE LOWER(TRIM("emailid")) = $1)
     OR
-    EXISTS (SELECT 1 FROM serviceprovider WHERE "emailid" = $1)
+    EXISTS (SELECT 1 FROM serviceprovider WHERE LOWER(TRIM("emailid")) = $1)
     AS exists;
   `,
-  [email]
+  [normalized]
 );
 
     res.json({
