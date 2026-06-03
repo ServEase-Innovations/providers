@@ -106,7 +106,7 @@ export const addProvider = async (req, res, next) => {
 export const getProviderById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const provider = await getProviderByIdService(id);
+    const provider = await getProviderByIdService(Number(id));
 
     if (!provider) {
       return responseHandling(res, 404, "Provider not found");
@@ -124,7 +124,7 @@ export const updateProvider = async (req, res, next) => {
     const { id } = req.params;
     const providerData = req.body;
 
-    const updatedProvider = await updateProviderService(id, providerData);
+    const updatedProvider = await updateProviderService(Number(id), providerData);
 
     if (!updatedProvider) {
       return responseHandling(res, 404, "Provider not found");
@@ -145,7 +145,7 @@ export const updateProvider = async (req, res, next) => {
 export const deleteProvider = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const summary = await deleteProviderCascade(id);
+    const summary = await deleteProviderCascade(Number(id));
     if (!summary) {
       return responseHandling(res, 404, "Provider not found");
     }

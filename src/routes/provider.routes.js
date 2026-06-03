@@ -1798,8 +1798,38 @@ router.post("/check-mobile", async (req, res) => {
 });
 
 router.get('/providers',getPaginatedProviders);
-router.get("/serviceprovider/:id", getProviderById);
-router.post('/serviceprovider/add', addProvider)
-router.put("/serviceprovider/:id", updateProvider);
-router.delete("/serviceprovider/:id", deleteProvider);
+
+/** Static path before /:id — avoids treating "add" as a bigint id on GET/HEAD. */
+router.post("/serviceprovider/add", addProvider);
+router.all("/serviceprovider/add", (req, res) => {
+  if (req.method === "POST") return;
+  res.status(405).json({
+    success: false,
+    code: "METHOD_NOT_ALLOWED",
+    message: "Use POST /api/service-providers/serviceprovider/add to create a provider.",
+  });
+});
+
+function guardProviderIdParam(req, res, next) {
+  const id = String(req.params.id ?? "").trim().toLowerCase();
+  if (id === "add") {
+    return res.status(405).json({
+      success: false,
+      code: "METHOD_NOT_ALLOWED",
+      message: "Use POST /api/service-providers/serviceprovider/add to create a provider.",
+    });
+  }
+  if (!/^\d+$/.test(String(req.params.id))) {
+    return res.status(400).json({
+      success: false,
+      code: "INVALID_PROVIDER_ID",
+      message: "Provider id must be a numeric serviceproviderid.",
+    });
+  }
+  next();
+}
+
+router.get("/serviceprovider/:id", guardProviderIdParam, getProviderById);
+router.put("/serviceprovider/:id", guardProviderIdParam, updateProvider);
+router.delete("/serviceprovider/:id", guardProviderIdParam, deleteProvider);
 export default router;
