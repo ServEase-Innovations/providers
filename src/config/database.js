@@ -1,9 +1,6 @@
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-const { syncPostgresDbAliases, requirePostgresDatabaseName } = require("../../../../scripts/postgres-env.cjs");
+import { syncPostgresDbAliases, requirePostgresDatabaseName } from "./postgresEnv.js";
 
 const dotenvPath =
   process.env.DOTENV_PATH ||
@@ -12,49 +9,49 @@ dotenv.config({ path: dotenvPath });
 syncPostgresDbAliases(process.env);
 
 const dbName = requirePostgresDatabaseName(process.env);
+const dbHost =
+  process.env.DB_HOST || process.env.POSTGRES_HOST || "127.0.0.1";
+const dbPort = Number(process.env.DB_PORT || process.env.POSTGRES_PORT || 5432);
+const dbUser =
+  process.env.DB_USER || process.env.POSTGRES_USER || "serveaso";
+const dbPassword =
+  process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || "serveaso";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-export const sequelize = new Sequelize(
- dbName,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT) || 5432,
-    dialect: "postgres",
+export const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
+  host: dbHost,
+  port: dbPort,
+  dialect: "postgres",
 
-    logging: false, // change to console.log if debugging
+  logging: false,
 
-    pool: {
-      max: 10,        // max connections
-      min: 0,
-      acquire: 30000, // max time (ms) to get connection
-      idle: 10000,    // max time (ms) connection can be idle
-    },
+  pool: {
+    max: 10,
+    min: 0,
+    acquire: 30000,
+    idle: 10000,
+  },
 
-    dialectOptions: isProduction
-      ? {
-          ssl: {
-            require: true,
-            rejectUnauthorized: false,
-          },
-        }
-      : {},
+  dialectOptions: isProduction
+    ? {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false,
+        },
+      }
+    : {},
 
-    define: {
-      freezeTableName: true, // prevents plural table names
-      timestamps: false,
-    },
-  }
-);
+  define: {
+    freezeTableName: true,
+    timestamps: false,
+  },
+});
 
 export const connectDB = async () => {
   try {
     console.log(
-      `ℹ️ Sequelize DB target -> host=${process.env.DB_HOST} port=${
-        Number(process.env.DB_PORT) || 5432
-      } db=${dbName} user=${process.env.DB_USER}`
+      `ℹ️ Sequelize DB target -> host=${dbHost} port=${dbPort} db=${dbName} user=${dbUser}`
     );
     await sequelize.authenticate();
     console.log("✅ Database connected successfully");

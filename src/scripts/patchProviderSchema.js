@@ -295,8 +295,25 @@ async function ensureSequenceDefault({
   );
 }
 
+async function assertCoreTablesExist() {
+  const [rows] = await sequelize.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'serviceprovider'
+     ) AS ok`
+  );
+  if (!rows[0]?.ok) {
+    throw new Error(
+      'Table public.serviceprovider is missing. Apply monorepo DB migrations first: ' +
+        'Serveaso repo → Actions → Migrate Database (dev), or locally `npm run db:migrate` ' +
+        'against serveaso1. Baseline comes from payments schema.sql. See docs/DATABASE_MIGRATIONS.md.'
+    );
+  }
+}
+
 export async function patchProviderSchema() {
   console.log("ℹ️ Running provider schema patch...");
+  await assertCoreTablesExist();
   for (const sql of statements) {
     try {
       await sequelize.query(sql);
