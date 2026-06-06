@@ -1,12 +1,42 @@
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
-import { syncPostgresDbAliases, requirePostgresDatabaseName } from "./postgresEnv.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import {
+  syncPostgresDbAliases,
+  requirePostgresDatabaseName,
+  loadMonorepoPostgresEnv,
+} from "./postgresEnv.js";
 
-const dotenvPath =
-  process.env.DOTENV_PATH ||
-  (process.env.NODE_ENV === "production" ? ".env.prod" : ".env");
-dotenv.config({ path: dotenvPath });
-syncPostgresDbAliases(process.env);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const serviceRoot = path.resolve(__dirname, "../..");
+
+function loadProviderEnv() {
+  const nodeEnv = process.env.NODE_ENV || "development";
+
+  const serviceEnvPath = path.join(serviceRoot, `.env.${nodeEnv}`);
+  const serviceFallback = path.join(serviceRoot, ".env");
+
+  if (fs.existsSync(serviceEnvPath)) {
+    dotenv.config({ path: serviceEnvPath, override: false });
+  } else if (fs.existsSync(serviceFallback)) {
+    dotenv.config({ path: serviceFallback, override: false });
+  }
+
+  const { loaded } = loadMonorepoPostgresEnv();
+  if (loaded.length) {
+    console.log("✔ Loaded monorepo postgres env:", loaded.join(", "));
+  }
+
+  if (process.env.DOTENV_PATH && fs.existsSync(process.env.DOTENV_PATH)) {
+    dotenv.config({ path: process.env.DOTENV_PATH, override: true });
+  }
+
+  syncPostgresDbAliases(process.env);
+}
+
+loadProviderEnv();
 
 const dbName = requirePostgresDatabaseName(process.env);
 const dbHost =

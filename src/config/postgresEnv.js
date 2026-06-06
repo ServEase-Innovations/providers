@@ -58,8 +58,15 @@ function loadPostgresEnvHelpers() {
     return db;
   }
 
-  return { syncPostgresDbAliases, requirePostgresDatabaseName };
+  return {
+    syncPostgresDbAliases,
+    requirePostgresDatabaseName,
+    loadMonorepoPostgresEnv: () => ({ root: null, loaded: [] }),
+  };
 }
 
-export const { syncPostgresDbAliases, requirePostgresDatabaseName } =
-  loadPostgresEnvHelpers();
+export const {
+  syncPostgresDbAliases,
+  requirePostgresDatabaseName,
+  loadMonorepoPostgresEnv,
+} = loadPostgresEnvHelpers();

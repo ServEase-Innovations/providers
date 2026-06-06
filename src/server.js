@@ -1,14 +1,8 @@
 import app from "./app.js";
 import cors from "cors";
-import dotenv from "dotenv";
 import { connectDB } from "./config/database.js";
 import { bootstrapSchemaFromDevDb } from "./scripts/bootstrapFromDevDb.js";
 import { patchProviderSchema } from "./scripts/patchProviderSchema.js";
-
-const dotenvPath =
-  process.env.DOTENV_PATH ||
-  (process.env.NODE_ENV === "production" ? ".env.prod" : ".env");
-dotenv.config({ path: dotenvPath });
 
 const PORT = process.env.PORT || 4000;
 
