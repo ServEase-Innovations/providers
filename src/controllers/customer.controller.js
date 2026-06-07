@@ -4,6 +4,7 @@ import responseHandling from "../utils/response.util.js";
 import { observeProviderAction } from "../monitoring/prometheus.js";
 import { logger } from "../utils/logger.js";
 import { languageKnownToArray } from "../utils/languageKnown.util.js";
+import { redactCustomerList } from "../utils/responseRedaction.js";
 
 function toEpochOrNull(value) {
   if (!value) return null;
@@ -51,7 +52,9 @@ export const getPaginatedCustomers = async (req, res, next) => {
         const { limit, offset } = getPagination(page, size);
         const data = await getPaginatedCustomersService(limit, offset);
         const response = getPagingData(data, page, limit);
-        response.results = (response.results || []).map((c) => customerToResponse(c));
+        response.results = redactCustomerList(
+          (response.results || []).map((c) => customerToResponse(c))
+        );
         observeProviderAction({ action: "get_paginated_customers", result: "success" });
         return responseHandling(res, 200, "Customers retrieved successfully", response);
     } catch (error) {

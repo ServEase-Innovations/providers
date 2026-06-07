@@ -6,6 +6,10 @@ import {
 } from "../services/vendor.service.js";
 import { getProvidersByVendorIdService } from "../services/provider.service.js";
 import responseHandling from "../utils/response.util.js";
+import {
+  redactProviderForPublic,
+  redactVendorForPublic,
+} from "../utils/responseRedaction.js";
 
 function toEpochOrNull(value) {
   if (!value) return null;
@@ -62,7 +66,7 @@ export const getAllVendors = async (req, res, next) => {
       res,
       200,
       "Vendors fetched successfully",
-      vendors.map(formatVendorWithEpoch)
+      vendors.map(formatVendorWithEpoch).map(redactVendorForPublic)
     );
   } catch (error) {
     next(error);
@@ -81,8 +85,10 @@ export const getVendorById = async (req, res, next) => {
     const providers = await getProvidersByVendorIdService(vendor.vendorId);
 
     return responseHandling(res, 200, "Vendor fetched successfully", {
-      ...formatVendorWithEpoch(vendor),
-      providers: providers.map(formatProviderForLegacyUi),
+      ...redactVendorForPublic(formatVendorWithEpoch(vendor)),
+      providers: providers
+        .map(formatProviderForLegacyUi)
+        .map(redactProviderForPublic),
     });
   } catch (error) {
     next(error);

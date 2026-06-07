@@ -500,9 +500,6 @@ router.get("/nearby", async (req, res) => {
       rating: p.rating,
       profilePic: p.profilePic,
 
-      mobileNo: p.mobileNo,
-      emailId: p.emailId,
-
       locality: p.locality,
       location: p.location,
       pinCode: p.pinCode,
@@ -1624,8 +1621,6 @@ AND (
         locality: p.locality,
         location: p.location,
         pinCode: p.pinCode,
-        mobileNo: p.mobileNo,
-        emailId: p.emailId,
         profilePic: p.profilePic,
         latitude: p.latitude,
         longitude: p.longitude,

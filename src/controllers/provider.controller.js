@@ -11,6 +11,10 @@ import responseHandling from "../utils/response.util.js";
 import Address from "../model/address.model.js";
 import ServiceProviderRole from "../model/serviceProviderRole.model.js"; // ✅ added import
 import { languageKnownToArray } from "../utils/languageKnown.util.js";
+import {
+  redactProviderForPublic,
+  redactProviderList,
+} from "../utils/responseRedaction.js";
 
 function toEpochOrNull(value) {
   if (!value) return null;
@@ -76,15 +80,15 @@ export const getPaginatedProviders = async (req, res, next) => {
         res,
         200,
         "All providers retrieved successfully",
-        hydrated
+        redactProviderList(hydrated)
       );
     }
     const { page, size } = req.query;
     const { limit, offset } = getPagination(page, size);
     const data = await getPaginatedProvidersService(limit, offset);
     const response = getPagingData(data, page, limit);
-    response.results = await Promise.all(
-      (response.results || []).map((p) => attachAddresses(p))
+    response.results = redactProviderList(
+      await Promise.all((response.results || []).map((p) => attachAddresses(p)))
     );
     return responseHandling(res, 200, "Providers retrieved successfully", response);
   } catch (error) {
@@ -112,8 +116,13 @@ export const getProviderById = async (req, res, next) => {
       return responseHandling(res, 404, "Provider not found");
     }
 
-    const hydrated = await attachAddresses(provider); // ✅ now includes housekeepingRoles
-    return responseHandling(res, 200, "Provider retrieved successfully", hydrated);
+    const hydrated = await attachAddresses(provider);
+    return responseHandling(
+      res,
+      200,
+      "Provider retrieved successfully",
+      redactProviderForPublic(hydrated)
+    );
   } catch (error) {
     next(error);
   }
