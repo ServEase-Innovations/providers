@@ -15,6 +15,7 @@ import {
   redactProviderForPublic,
   redactProviderList,
 } from "../utils/responseRedaction.js";
+import { isProviderOwner } from "../middleware/resourceAccess.js";
 
 function toEpochOrNull(value) {
   if (!value) return null;
@@ -117,12 +118,10 @@ export const getProviderById = async (req, res, next) => {
     }
 
     const hydrated = await attachAddresses(provider);
-    return responseHandling(
-      res,
-      200,
-      "Provider retrieved successfully",
-      redactProviderForPublic(hydrated)
-    );
+    const view = isProviderOwner(req, Number(id))
+      ? hydrated
+      : redactProviderForPublic(hydrated);
+    return responseHandling(res, 200, "Provider retrieved successfully", view);
   } catch (error) {
     next(error);
   }

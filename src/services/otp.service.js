@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { signServeasoSessionToken } from "../utils/sessionToken.js";
 import Customer from "../model/customer.model.js";
 import Provider from "../model/provider.model.js";
 import { clearOtpSession, getOtpSession, setOtpSession } from "./otp.store.js";
@@ -231,8 +232,26 @@ export const verifyOtpService = async ({ mobile: mobileInput, otp }) => {
 
   clearOtpSession(mobile);
 
+  const tokenPayload =
+    session.subjectType === "SERVICE_PROVIDER"
+      ? {
+          role: "SERVICE_PROVIDER",
+          serviceProviderId: data.serviceProviderId,
+        }
+      : {
+          role: "CUSTOMER",
+          customerId: data.customerId,
+        };
+
+  let token;
+  try {
+    token = signServeasoSessionToken(tokenPayload);
+  } catch {
+    token = crypto.randomBytes(24).toString("hex");
+  }
+
   return {
-    token: crypto.randomBytes(24).toString("hex"),
+    token,
     ...data,
   };
 };

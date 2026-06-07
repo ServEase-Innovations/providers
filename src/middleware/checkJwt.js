@@ -1,6 +1,7 @@
 import { expressjwt } from "express-jwt";
 import jwksRsa from "jwks-rsa";
 
+const DEV_ADMIN_SECRET = "serveaso-test-push-secret";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 const PUBLIC_MUTATION_PATTERNS = [
@@ -12,7 +13,7 @@ const PUBLIC_MUTATION_PATTERNS = [
   /^\/api\/service-providers\/serviceprovider\/add$/,
 ];
 
-function isAuthConfigured() {
+export function isAuthConfigured() {
   return Boolean(
     process.env.AUTH0_DOMAIN?.trim() && process.env.AUTH0_AUDIENCE?.trim()
   );
@@ -28,13 +29,13 @@ function shouldProtectMutations() {
   return isProduction() && isAuthConfigured();
 }
 
-function isProduction() {
+export function isProduction() {
   return process.env.NODE_ENV === "production";
 }
 
 let checkJwtMiddleware = null;
 
-function getCheckJwt() {
+export function getCheckJwt() {
   if (!checkJwtMiddleware && isAuthConfigured()) {
     checkJwtMiddleware = expressjwt({
       secret: jwksRsa.expressJwtSecret({
@@ -48,6 +49,26 @@ function getCheckJwt() {
     });
   }
   return checkJwtMiddleware;
+}
+
+export function hasValidBypassSecret(req) {
+  const expected = (
+    process.env.INTERNAL_NOTIFY_SECRET ||
+    process.env.ADMIN_PUSH_SECRET ||
+    process.env.ADMIN_TICKET_SECRET ||
+    ""
+  ).trim();
+  const adminProvided = String(
+    req.headers["x-admin-push-secret"] || req.headers["x-admin-api-secret"] || ""
+  ).trim();
+  const internalProvided = String(req.headers["x-internal-secret"] || "").trim();
+  if (expected && (adminProvided === expected || internalProvided === expected)) {
+    return true;
+  }
+  if (!isProduction() && adminProvided === DEV_ADMIN_SECRET) {
+    return true;
+  }
+  return false;
 }
 
 function normalizePath(req) {
@@ -71,6 +92,9 @@ export function requireJwtOnMutations(req, res, next) {
     return next();
   }
   if (isPublicMutation(req)) {
+    return next();
+  }
+  if (hasValidBypassSecret(req)) {
     return next();
   }
 

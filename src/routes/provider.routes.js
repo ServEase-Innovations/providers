@@ -8,6 +8,10 @@ import {
   updateProvider,
   deleteProvider,
 } from "../controllers/provider.controller.js";
+import {
+  optionalAuthenticateRead,
+  loadActor,
+} from "../middleware/resourceAccess.js";
 import { languageKnownToArray } from "../utils/languageKnown.util.js";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
@@ -1829,7 +1833,13 @@ function guardProviderIdParam(req, res, next) {
   next();
 }
 
-router.get("/serviceprovider/:id", guardProviderIdParam, getProviderById);
+router.get(
+  "/serviceprovider/:id",
+  guardProviderIdParam,
+  optionalAuthenticateRead,
+  loadActor,
+  getProviderById
+);
 router.put("/serviceprovider/:id", guardProviderIdParam, updateProvider);
 router.delete("/serviceprovider/:id", guardProviderIdParam, deleteProvider);
 export default router;

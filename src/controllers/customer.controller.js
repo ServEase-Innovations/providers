@@ -33,7 +33,12 @@ export const getCustomerById = async (req, res, next) => {
             return responseHandling(res, 404, "Customer not found");
         }
         observeProviderAction({ action: "get_customer_by_id", result: "found" });
-        return responseHandling(res, 200, "Customer retrieved successfully", customerToResponse(customer));
+        return responseHandling(
+            res,
+            200,
+            "Customer retrieved successfully",
+            customerToResponse(customer)
+        );
         
     } catch (error) {
         observeProviderAction({ action: "get_customer_by_id", result: "error" });
