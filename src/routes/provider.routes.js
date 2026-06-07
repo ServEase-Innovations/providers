@@ -1,5 +1,6 @@
 import { Router } from "express";
 import pg from "pg";
+import { buildPostgresSsl } from "../config/postgresSsl.js";
 import {
   addProvider,
   getPaginatedProviders,
@@ -29,12 +30,15 @@ const pgPassword =
 const pgDatabase =
   process.env.DB_NAME || process.env.TARGET_DB_NAME || process.env.POSTGRES_DB;
 
+const { poolSsl } = buildPostgresSsl(process.env);
+
 const pool = new Pool({
   host: pgHost,
   user: pgUser,
   password: pgPassword,
   database: pgDatabase,
   port: pgPort,
+  ...(poolSsl ? { ssl: poolSsl } : {}),
 });
 
 console.log(
