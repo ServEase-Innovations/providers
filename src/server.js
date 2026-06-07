@@ -1,14 +1,15 @@
 import app from "./app.js";
-import cors from "cors";
 import { connectDB } from "./config/database.js";
 import { bootstrapSchemaFromDevDb } from "./scripts/bootstrapFromDevDb.js";
 import { patchProviderSchema } from "./scripts/patchProviderSchema.js";
+import { assertCorsOriginsProduction } from "./lib/corsOrigins.js";
 
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
-
 const startServer = async () => {
+  if (process.env.NODE_ENV === "production") {
+    assertCorsOriginsProduction();
+  }
   await connectDB();
 
   if (process.env.BOOTSTRAP_SCHEMA_FROM_DEV === "true") {

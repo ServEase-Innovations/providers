@@ -3,7 +3,10 @@ import { logger } from "../utils/logger.js";
 
 const errorHandler = (err, req, res, next) => {
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const status = err.status || err.statusCode || 500;
+  const status =
+    err.name === "UnauthorizedError"
+      ? 401
+      : err.status || err.statusCode || 500;
   const code = err.code || "INTERNAL_ERROR";
 
   // Prometheus metric
