@@ -8,6 +8,7 @@ import {
   requirePostgresDatabaseName,
   loadMonorepoPostgresEnv,
 } from "./postgresEnv.js";
+import { buildPostgresSsl, logPostgresSsl } from "./postgresSsl.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serviceRoot = path.resolve(__dirname, "../..");
@@ -47,7 +48,8 @@ const dbUser =
 const dbPassword =
   process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || "serveaso";
 
-const isProduction = process.env.NODE_ENV === "production";
+const { dialectOptions: postgresDialectOptions } = buildPostgresSsl(process.env);
+logPostgresSsl(process.env);
 
 export const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
   host: dbHost,
@@ -63,14 +65,7 @@ export const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
     idle: 10000,
   },
 
-  dialectOptions: isProduction
-    ? {
-        ssl: {
-          require: true,
-          rejectUnauthorized: false,
-        },
-      }
-    : {},
+  dialectOptions: postgresDialectOptions,
 
   define: {
     freezeTableName: true,
