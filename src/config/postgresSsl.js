@@ -68,18 +68,17 @@ export function buildPostgresSsl(env = process.env) {
   const rejectFlag = (env.POSTGRES_SSL_REJECT_UNAUTHORIZED || "").trim().toLowerCase();
   const { pem: caPem, source: caSource } = readCaPem(env);
 
+  const sslMode = (env.POSTGRES_SSL_MODE || "").trim().toLowerCase();
   let rejectUnauthorized = false;
-  if (rejectFlag === "true") {
+  if (rejectFlag === "true" || sslMode === "verify") {
     if (!caPem) {
       throw new Error(
-        "POSTGRES_SSL_REJECT_UNAUTHORIZED=true requires a CA bundle (POSTGRES_SSL_CA_PATH or certs/rds-global-bundle.pem)."
+        "Strict Postgres TLS requires a CA bundle. Set POSTGRES_SSL_CA_PATH or bundle certs/rds-global-bundle.pem."
       );
     }
     rejectUnauthorized = true;
   } else if (rejectFlag === "false") {
     rejectUnauthorized = false;
-  } else if (caPem) {
-    rejectUnauthorized = true;
   }
 
   const ssl =
@@ -103,8 +102,8 @@ export function logPostgresSsl(env = process.env) {
     console.log(`[postgres ssl] Strict TLS verification enabled (${source})`);
     return;
   }
-  console.warn(
-    "[postgres ssl] TLS encryption without certificate verification. " +
-      "Set POSTGRES_SSL_REJECT_UNAUTHORIZED=true for strict mode."
+  console.log(
+    "[postgres ssl] TLS encrypt-only (rejectUnauthorized: false). " +
+      "Set POSTGRES_SSL_REJECT_UNAUTHORIZED=true on RDS/Aurora prod for strict verification."
   );
 }
