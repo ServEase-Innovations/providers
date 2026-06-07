@@ -27,15 +27,18 @@ const errorHandler = (err, req, res, next) => {
     message: err.message,
   });
 
-  // Response
-  res.status(status).json({
+  const body = {
     success: false,
     code,
     message: err.userMessage || "Something went wrong. Please try again.",
-    debugMessage: err.message || "Internal Server Error",
     requestId,
-    errors: err.errors || null
-  });
+    errors: err.errors || null,
+  };
+  if (process.env.NODE_ENV !== "production") {
+    body.debugMessage = err.message || "Internal Server Error";
+  }
+
+  res.status(status).json(body);
 };
 
 export default errorHandler;
