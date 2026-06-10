@@ -814,10 +814,17 @@ const getAge = (dobString) =>{
 
 
 
-router.post("/nearby-monthly", async (req, res) => {
-  try {
-    const b = req.body || {};
-    const q = req.query || {};
+class NearbyMonthlyError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+    this.body = { message };
+  }
+}
+
+async function runNearbyMonthlyDiscovery(bInput, qInput) {
+    const b = bInput || {};
+    const q = qInput || {};
     const {
       lat,
       lng,
@@ -849,25 +856,25 @@ router.post("/nearby-monthly", async (req, res) => {
       !preferredStartTime ||
       !serviceDurationMinutes
     ) {
-      return res.status(400).json({ message: "Missing required fields" });
+      throw new NearbyMonthlyError(400, "Missing required fields");
     }
 
     if (!isValidISODate(startDate) || !isValidISODate(endDate)) {
-      return res.status(400).json({
-        message: "Invalid date format. Use YYYY-MM-DD for startDate and endDate.",
-      });
+      throw new NearbyMonthlyError(
+        400,
+        "Invalid date format. Use YYYY-MM-DD for startDate and endDate."
+      );
     }
 
     if (!isValidTimeHHmm(preferredStartTime)) {
-      return res.status(400).json({
-        message: "Invalid preferredStartTime. Use HH:mm (24-hour), e.g. 08:00.",
-      });
+      throw new NearbyMonthlyError(
+        400,
+        "Invalid preferredStartTime. Use HH:mm (24-hour), e.g. 08:00."
+      );
     }
 
     if (dayjs(endDate).isBefore(dayjs(startDate))) {
-      return res.status(400).json({
-        message: "endDate must be on/after startDate.",
-      });
+      throw new NearbyMonthlyError(400, "endDate must be on/after startDate.");
     }
 
     const roleSearchNorm = String(role).trim();
@@ -875,9 +882,10 @@ router.post("/nearby-monthly", async (req, res) => {
     let latNum = Number(lat);
     let lngNum = Number(lng);
     if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
-      return res.status(400).json({
-        message: "Invalid lat/lng. Send finite numbers (e.g. customer latitude/longitude).",
-      });
+      throw new NearbyMonthlyError(
+        400,
+        "Invalid lat/lng. Send finite numbers (e.g. customer latitude/longitude)."
+      );
     }
     if (Math.abs(latNum) > 90 && Math.abs(lngNum) <= 90) {
       [latNum, lngNum] = [lngNum, latNum];
@@ -890,6 +898,14 @@ router.post("/nearby-monthly", async (req, res) => {
         : null;
     const hasCustomerID =
       customerIdRaw != null && !Number.isNaN(customerIdRaw);
+
+    const serviceProviderIdFilter = (() => {
+      const raw = b.serviceProviderId ?? b.serviceproviderid;
+      if (raw == null || raw === "") return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    })();
+
      /* ---------- STEP 1: Nearby Providers WITH OR FILTER ---------- */
 
 const {
@@ -898,7 +914,7 @@ const {
   gender,
   diet,
   languages
-} = req.body;
+} = b;
 
 // /* 👉 Dynamic OR filter block */
 const filterQuery = `
@@ -984,12 +1000,18 @@ AND (
           )
         )
         AND (
-          6371 * acos(
-            cos(radians($1)) * cos(radians(sp.latitude)) *
-            cos(radians(sp.longitude) - radians($2)) +
-            sin(radians($1)) * sin(radians(sp.latitude))
+          ($10::bigint IS NOT NULL AND sp.serviceproviderid = $10::bigint)
+          OR (
+            $10::bigint IS NULL
+            AND (
+              6371 * acos(
+                cos(radians($1)) * cos(radians(sp.latitude)) *
+                cos(radians(sp.longitude) - radians($2)) +
+                sin(radians($1)) * sin(radians(sp.latitude))
+              )
+            ) <= $4
           )
-        ) <= $4
+        )
 
         ${filterQuery}
           
@@ -1005,7 +1027,8 @@ AND (
   minRating ?? null,       // $6
   gender ?? null,          // $7
   diet ?? null,            // $8
-  (languages?.length ? languages : null) // $9
+  (languages?.length ? languages : null), // $9
+  serviceProviderIdFilter // $10
 ]
     );
 
@@ -1735,16 +1758,69 @@ AND (
     const startIndex = (page - 1) * limit;
     const paginated = ordered.slice(startIndex, startIndex + limit);
 
-    res.json({
+    return {
       count: ordered.length,
       page,
       limit,
       providers: paginated
-    });
+    };
+}
 
+router.post("/nearby-monthly", async (req, res) => {
+  try {
+    const result = await runNearbyMonthlyDiscovery(req.body, req.query);
+    res.json(result);
   } catch (err) {
+    if (err instanceof NearbyMonthlyError) {
+      return res.status(err.status).json(err.body);
+    }
     console.error("❌ nearby-monthly error:", err);
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.post("/:providerId/check-schedule", async (req, res) => {
+  try {
+    const providerId = Number(req.params.providerId);
+    if (!Number.isFinite(providerId) || providerId < 1) {
+      return res.status(400).json({ success: false, message: "Invalid providerId" });
+    }
+
+    const body = {
+      ...(req.body || {}),
+      serviceProviderId: providerId,
+      serviceproviderid: providerId,
+    };
+    const result = await runNearbyMonthlyDiscovery(body, { page: 1, limit: 1 });
+    const provider = result.providers?.[0];
+
+    if (!provider) {
+      return res.json({
+        success: true,
+        available: false,
+        fullyAvailable: false,
+        message:
+          "Provider not found or not serving this role/area for your schedule.",
+      });
+    }
+
+    const monthlyAvailability = provider.monthlyAvailability || {};
+    const fullyAvailable = monthlyAvailability.fullyAvailable === true;
+
+    return res.json({
+      success: true,
+      available: fullyAvailable,
+      fullyAvailable,
+      summary: monthlyAvailability.summary,
+      exceptions: monthlyAvailability.exceptions ?? [],
+      provider,
+    });
+  } catch (err) {
+    if (err instanceof NearbyMonthlyError) {
+      return res.status(err.status).json({ success: false, ...err.body });
+    }
+    console.error("❌ check-schedule error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 

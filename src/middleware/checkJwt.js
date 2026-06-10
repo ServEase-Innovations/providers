@@ -8,6 +8,7 @@ const PUBLIC_MUTATION_PATTERNS = [
   /^\/api\/customer$/,
   /^\/api\/auth\/otp\//,
   /^\/api\/service-providers\/nearby-monthly$/,
+  /^\/api\/service-providers\/\d+\/check-schedule$/,
   /^\/api\/service-providers\/check-email$/,
   /^\/api\/service-providers\/check-mobile$/,
   /^\/api\/service-providers\/serviceprovider\/add$/,
