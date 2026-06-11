@@ -580,6 +580,92 @@ function isDateInEngagementVacation(dateYmd, vacationStart, vacationEnd) {
   return d >= a && d <= b;
 }
 
+function rolesMatchForSearch(serviceType, roleNorm) {
+  const service = String(serviceType ?? "").trim().toLowerCase();
+  const role = String(roleNorm ?? "").trim().toLowerCase();
+  if (!service || !role) return true;
+  if (service === role) return true;
+  if (service.includes("cook") && role.includes("cook")) return true;
+  if (service.includes("maid") && role.includes("maid")) return true;
+  if (service.includes("nanny") && role.includes("nanny")) return true;
+  return false;
+}
+
+function isActiveBlockingEngagement(prev) {
+  if (!prev || prev.active === false) return false;
+  const life = String(prev.engagementStatus ?? "").toUpperCase();
+  const task = String(prev.taskStatus ?? "NOT_STARTED").toUpperCase();
+  if (["CANCELLED", "COMPLETED", "CLOSED", "EXPIRED"].includes(life)) {
+    return false;
+  }
+  if (["CANCELLED", "COMPLETED"].includes(task)) return false;
+  return true;
+}
+
+/** Date overlap alone is not enough — only block when visit times collide (non-vacation days). */
+function customerHasSchedulableConflict(
+  prev,
+  rangeStartStr,
+  rangeEndStr,
+  preferredTime,
+  durationSec,
+  roleNorm
+) {
+  if (!isActiveBlockingEngagement(prev)) return false;
+  if (!rolesMatchForSearch(prev.serviceType, roleNorm)) return false;
+  if (!engagementOverlapsSearchWindow(prev, rangeStartStr, rangeEndStr)) {
+    return false;
+  }
+
+  const startEp = Number(prev.startEpoch);
+  let visitTimeStr;
+  if (Number.isFinite(startEp)) {
+    visitTimeStr = dayjs.unix(startEp).tz("Asia/Kolkata").format("HH:mm");
+  } else if (prev.startDate != null) {
+    visitTimeStr = dayjs(prev.startDate).tz("Asia/Kolkata").format("HH:mm");
+  } else {
+    return true;
+  }
+
+  let visitDurSec = durationSec;
+  const dm = prev.durationMinutes;
+  if (dm != null && dm >= 1 && dm <= 24 * 60) {
+    visitDurSec = dm * 60;
+  }
+
+  const rangeStart = dayjs
+    .tz(rangeStartStr, "YYYY-MM-DD", "Asia/Kolkata")
+    .startOf("day");
+  const rangeEnd = dayjs.tz(rangeEndStr, "YYYY-MM-DD", "Asia/Kolkata").startOf(
+    "day"
+  );
+  const engStart = dayjs(prev.startDate).tz("Asia/Kolkata").startOf("day");
+  const engEnd = dayjs(prev.endDate).tz("Asia/Kolkata").startOf("day");
+  const from = engStart.isAfter(rangeStart) ? engStart : rangeStart;
+  const to = engEnd.isBefore(rangeEnd) ? engEnd : rangeEnd;
+
+  for (let c = from.clone(); !c.isAfter(to, "day"); c = c.add(1, "day")) {
+    const dateStr = c.format("YYYY-MM-DD");
+    if (
+      isDateInEngagementVacation(
+        dateStr,
+        prev.vacationStartDate,
+        prev.vacationEndDate
+      )
+    ) {
+      continue;
+    }
+    const prefStart = epochInIST(dateStr, preferredTime);
+    const prefEnd = prefStart + durationSec;
+    const visitStart = epochInIST(dateStr, visitTimeStr);
+    const visitEnd = visitStart + visitDurSec;
+    if (overlaps(prefStart, prefEnd, visitStart, visitEnd)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Daily busy intervals from this customer's existing engagement with this provider,
  * intersected with the search range. Ensures overlap checks match the booked wall-clock
@@ -593,9 +679,8 @@ function previousEngagementBusyIntervals(
   roleNorm,
   fallbackDurationSec
 ) {
-  if (!prev || prev.active === false) return [];
-  const st = prev.serviceType != null ? String(prev.serviceType).trim().toLowerCase() : "";
-  if (!st || st !== String(roleNorm).trim().toLowerCase()) return [];
+  if (!isActiveBlockingEngagement(prev)) return [];
+  if (!rolesMatchForSearch(prev.serviceType, roleNorm)) return [];
 
   const startEp = Number(prev.startEpoch);
   let timeStr;
@@ -844,6 +929,12 @@ async function runNearbyMonthlyDiscovery(bInput, qInput) {
       preferredStartTimeRaw || hhmmFromEpoch(preferred_start_epoch);
     const customerID = b.customerID ?? q.customerID;
     const customerId = b.customerId ?? q.customerId;
+    const excludeEngagementIdRaw =
+      b.excludeEngagementId ?? b.exclude_engagement_id ?? null;
+    const excludeEngagementId =
+      excludeEngagementIdRaw != null && String(excludeEngagementIdRaw).trim() !== ""
+        ? String(excludeEngagementIdRaw).trim()
+        : null;
 
     const { page, limit } = parseNearbyMonthlyPagination(q, b);
 
@@ -1081,6 +1172,13 @@ AND (
         FROM engagements e
         WHERE e."customerid" = $1
           AND e."serviceproviderid" = ANY($2::bigint[])
+          AND e.active = true
+          AND UPPER(COALESCE(e.engagement_status, '')) NOT IN (
+            'CANCELLED', 'COMPLETED', 'CLOSED', 'EXPIRED'
+          )
+          AND UPPER(COALESCE(e.task_status, 'NOT_STARTED')) NOT IN (
+            'CANCELLED', 'COMPLETED'
+          )
         ORDER BY
           e."serviceproviderid",
           e."end_date" DESC NULLS LAST,
@@ -1281,6 +1379,13 @@ AND (
     const paBookedCountBySp = {};
     const providersWithPaBookedRows = new Set();
     for (const b of bookingsRes.rows) {
+      if (
+        excludeEngagementId &&
+        b.engagementId != null &&
+        String(b.engagementId) === excludeEngagementId
+      ) {
+        continue;
+      }
       const spid = String(b.serviceProviderId);
       providersWithPaBookedRows.add(spid);
       paBookedCountBySp[spid] = (paBookedCountBySp[spid] || 0) + 1;
@@ -1315,6 +1420,13 @@ AND (
     const engOnDemandBySp = {};
 
     for (const e of engagementsRes.rows) {
+      if (
+        excludeEngagementId &&
+        e.engagementId != null &&
+        String(e.engagementId) === excludeEngagementId
+      ) {
+        continue;
+      }
       const spid = String(e.serviceProviderId);
 
       if (e.booking_type === "ON_DEMAND") {
@@ -1410,8 +1522,15 @@ AND (
       const prevForSp = hasCustomerID
         ? previousBookingByProvider.get(pidKey)
         : null;
+      const prevForAvailability =
+        excludeEngagementId &&
+        prevForSp?.engagementId != null &&
+        String(prevForSp.engagementId) === excludeEngagementId
+          ? null
+          : prevForSp;
+
       const fromPrevEngagement = previousEngagementBusyIntervals(
-        prevForSp,
+        prevForAvailability,
         startDate,
         endDate,
         roleSearchNorm,
@@ -1510,17 +1629,11 @@ AND (
         }
 
         /* Same customer + provider already engaged for another service in this period (e.g. MAID vs NANNY search) */
-        if (hasCustomerID && prevForSp && prevForSp.active !== false) {
-          const st =
-            prevForSp.serviceType != null
-              ? String(prevForSp.serviceType).trim().toLowerCase()
-              : "";
-          const roleL = String(roleSearchNorm).trim().toLowerCase();
+        if (hasCustomerID && prevForAvailability && isActiveBlockingEngagement(prevForAvailability)) {
           if (
-            st &&
-            st !== roleL &&
-            engagementOverlapsSearchWindow(prevForSp, startDate, endDate) &&
-            calendarDayInPriorEngagement(prevForSp, dateStr)
+            !rolesMatchForSearch(prevForAvailability.serviceType, roleSearchNorm) &&
+            engagementOverlapsSearchWindow(prevForAvailability, startDate, endDate) &&
+            calendarDayInPriorEngagement(prevForAvailability, dateStr)
           ) {
             daysWithDifferentTime++;
             exceptions.push({
@@ -1547,29 +1660,6 @@ AND (
         );
 
         if (blockingPreferred.length === 0) {
-          daysAtPreferredTime++;
-          continue;
-        }
-
-        /* Only this customer's current engagement (synthetic + matching PA) — same wall slot as requested */
-        const ownBookingBlock = b =>
-          Boolean(
-            b._fromCustomerPriorEngagement ||
-            b._customerOwnPa ||
-            b._customerOwnEngagementFallback
-          );
-        const ownInPreferred = blockingPreferred.filter(ownBookingBlock);
-        const foreignInPreferred = blockingPreferred.filter(
-          b => !ownBookingBlock(b)
-        );
-        if (
-          foreignInPreferred.length === 0 &&
-          ownInPreferred.some(
-            p =>
-              preferredEpoch >= p.slot_start_epoch &&
-              prefEnd <= p.slot_end_epoch
-          )
-        ) {
           daysAtPreferredTime++;
           continue;
         }
@@ -1671,6 +1761,16 @@ AND (
         distanceKm: Number(p.distance_km.toFixed(2)),
         distance_km: Number(p.distance_km.toFixed(2)),
         bestMatch: false,
+        hasCustomerOverlap:
+          hasCustomerID &&
+          customerHasSchedulableConflict(
+            prevForAvailability,
+            startDate,
+            endDate,
+            preferredStartTime,
+            durationSec,
+            roleSearchNorm
+          ),
         monthlyAvailability: {
           preferredTime: preferredStartTime,
           fullyAvailable:
@@ -1729,16 +1829,11 @@ AND (
 
     available.sort((a, b) => a.distanceKm - b.distanceKm);
 
-    if (available.length > 0) {
-      available[0].bestMatch = true;
-    }
-
     const ordered = [...available, ...notAvailable];
 
     // When a customer is searching, prioritize providers they booked before.
     // This ensures previouslyBooked providers are visible in the first page.
     if (hasCustomerID) {
-      for (const p of ordered) p.bestMatch = false;
       ordered.sort((a, b) => {
         const ap = a.previouslyBooked ? 1 : 0;
         const bp = b.previouslyBooked ? 1 : 0;
@@ -1750,8 +1845,15 @@ AND (
 
         return a.distanceKm - b.distanceKm;
       });
+    }
 
-      if (ordered.length > 0) ordered[0].bestMatch = true;
+    const bestMatchCandidate = ordered.find(
+      (p) =>
+        p.monthlyAvailability.fullyAvailable &&
+        !p.hasCustomerOverlap
+    );
+    if (bestMatchCandidate) {
+      bestMatchCandidate.bestMatch = true;
     }
 
     /* ---------- STEP 6: Pagination ---------- */
