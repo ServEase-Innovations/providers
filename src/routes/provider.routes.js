@@ -22,6 +22,16 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(customParseFormat);
 
+/** Engagements in terminal states must not block provider availability. */
+function activeEngagementStatusSql(alias = "e") {
+  return `(
+    UPPER(COALESCE(${alias}.engagement_status, '')) NOT IN (
+      'CANCELLED', 'COMPLETED', 'CLOSED', 'EXPIRED'
+    )
+    AND UPPER(COALESCE(${alias}.task_status, 'NOT_STARTED')) NOT IN ('CANCELLED', 'COMPLETED')
+  )`;
+}
+
 const router = Router();
 const { Pool } = pg;
 
@@ -1347,13 +1357,15 @@ AND (
         pa.engagement_id AS "engagementId",
         e.duration_minutes AS "engagementDurationMinutes"
       FROM provider_availability pa
-      LEFT JOIN engagements e ON e.engagement_id = pa.engagement_id
+      INNER JOIN engagements e ON e.engagement_id = pa.engagement_id
       WHERE
         pa.serviceproviderid = ANY($1)
         AND pa.status = 'BOOKED'
         AND pa.date BETWEEN $2::date AND $3::date
         AND pa.slot_start_epoch IS NOT NULL
         AND pa.slot_end_epoch IS NOT NULL
+        AND e.active = true
+        AND ${activeEngagementStatusSql("e")}
       `,
       [providerIds, startDate, endDate]
     );
@@ -1396,7 +1408,7 @@ AND (
         AND e.start_date <= $3::date
         AND e.end_date >= $2::date
         AND e.booking_type IN ('MONTHLY', 'SHORT_TERM', 'ON_DEMAND')
-        AND (e.engagement_status = 'ASSIGNED' OR e.assignment_status = 'ASSIGNED')
+        AND ${activeEngagementStatusSql("e")}
         AND (
           e.service_type IS NULL
           OR LOWER(TRIM(e.service_type::text)) = LOWER(TRIM($4::text))
