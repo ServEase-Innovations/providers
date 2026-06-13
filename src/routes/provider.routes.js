@@ -1204,7 +1204,7 @@ AND (
     );
 
     if (!providersRes.rows.length) {
-      return res.json({ count: 0, providers: [] });
+      return { count: 0, page, limit, providers: [] };
     }
 
     const providerIds = providersRes.rows.map((p) => p.serviceProviderId);
