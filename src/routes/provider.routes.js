@@ -604,6 +604,48 @@ function dateRangesOverlapYmd(rangeAStart, rangeAEnd, rangeBStart, rangeBEnd) {
   return a0 <= b1 && b0 <= a1;
 }
 
+function resolveNearbyBookingType(b, startDate, endDate) {
+  const raw = b?.bookingType ?? b?.booking_type;
+  if (raw != null && String(raw).trim() !== "") {
+    return String(raw).trim().toUpperCase();
+  }
+  const totalDays =
+    dayjs(calendarYmdKolkata(endDate)).diff(
+      dayjs(calendarYmdKolkata(startDate)),
+      "day"
+    ) + 1;
+  if (totalDays <= 14) return "SHORT_TERM";
+  return "MONTHLY";
+}
+
+function compareNearbyMonthlyProviders(a, b, hasCustomerID) {
+  const af = a.monthlyAvailability?.fullyAvailable ? 1 : 0;
+  const bf = b.monthlyAvailability?.fullyAvailable ? 1 : 0;
+  if (bf !== af) return bf - af;
+
+  const aVac = a.monthlyAvailability?.summary?.vacationDays ?? 0;
+  const bVac = b.monthlyAvailability?.summary?.vacationDays ?? 0;
+  if (aVac !== bVac) return aVac - bVac;
+
+  const aUnav = a.monthlyAvailability?.summary?.unavailableDays ?? 0;
+  const bUnav = b.monthlyAvailability?.summary?.unavailableDays ?? 0;
+  if (aUnav !== bUnav) return aUnav - bUnav;
+
+  const aDiff = a.monthlyAvailability?.summary?.daysWithDifferentTime ?? 0;
+  const bDiff = b.monthlyAvailability?.summary?.daysWithDifferentTime ?? 0;
+  if (aDiff !== bDiff) return aDiff - bDiff;
+
+  if (hasCustomerID) {
+    const ap = a.previouslyBooked ? 1 : 0;
+    const bp = b.previouslyBooked ? 1 : 0;
+    if (bp !== ap) return bp - ap;
+  }
+
+  const aDist = a.distanceKm ?? a.distance_km ?? 0;
+  const bDist = b.distanceKm ?? b.distance_km ?? 0;
+  return aDist - bDist;
+}
+
 function buildVacationAvailabilityPayload(row, searchStart, searchEnd) {
   const vacationStartDate = calendarYmdKolkata(row.vacation_start_date);
   const vacationEndDate = calendarYmdKolkata(row.vacation_end_date);
@@ -1074,6 +1116,8 @@ async function runNearbyMonthlyDiscovery(bInput, qInput) {
         : null;
     const hasCustomerID =
       customerIdRaw != null && !Number.isNaN(customerIdRaw);
+
+    const bookingTypeSearch = resolveNearbyBookingType(b, startDate, endDate);
 
     const serviceProviderIdFilter = (() => {
       const raw = b.serviceProviderId ?? b.serviceproviderid;
@@ -1630,6 +1674,7 @@ AND (
       let daysAtPreferredTime = 0;
       let daysWithDifferentTime = 0;
       let unavailableDays = 0;
+      let vacationDays = 0;
       const exceptions = [];
 
       const rangeEvalStart = dayjs
@@ -1664,6 +1709,17 @@ AND (
         }
 
         if (spDayClearedForVisit.has(`${pidKey}:${dateStr}`)) {
+          if (engagementVacationBySpAndDate.has(`${pidKey}:${dateStr}`)) {
+            vacationDays++;
+            unavailableDays++;
+            exceptions.push({
+              date: dateStr,
+              reason: "VACATION",
+              suggestedTime: null,
+            });
+            continue;
+          }
+
           const pe = epochInIST(dateStr, preferredStartTime);
           const insideCleared = todaysSlots.some((slot) => {
             const a = epochInIST(dateStr, slot.slot_start);
@@ -1853,13 +1909,17 @@ AND (
           ),
         monthlyAvailability: {
           preferredTime: preferredStartTime,
+          bookingType: bookingTypeSearch,
           fullyAvailable:
-            unavailableDays === 0 && daysWithDifferentTime === 0,
+            unavailableDays === 0 &&
+            daysWithDifferentTime === 0 &&
+            vacationDays === 0,
           summary: {
             totalDays,
             daysAtPreferredTime,
             daysWithDifferentTime,
-            unavailableDays
+            unavailableDays,
+            vacationDays,
           },
           exceptions
         },
@@ -1927,38 +1987,14 @@ AND (
 
 
     /* ---------- STEP 5: Group & Rank ---------- */
-    const available = evaluatedProviders.filter(
-      p => p.monthlyAvailability.fullyAvailable
-    );
-
-    const notAvailable = evaluatedProviders.filter(
-      p => !p.monthlyAvailability.fullyAvailable
-    );
-
-    available.sort((a, b) => a.distanceKm - b.distanceKm);
-
-    const ordered = [...available, ...notAvailable];
-
-    // When a customer is searching, prioritize providers they booked before.
-    // This ensures previouslyBooked providers are visible in the first page.
-    if (hasCustomerID) {
-      ordered.sort((a, b) => {
-        const ap = a.previouslyBooked ? 1 : 0;
-        const bp = b.previouslyBooked ? 1 : 0;
-        if (bp !== ap) return bp - ap;
-
-        const af = a.monthlyAvailability.fullyAvailable ? 1 : 0;
-        const bf = b.monthlyAvailability.fullyAvailable ? 1 : 0;
-        if (bf !== af) return bf - af;
-
-        return a.distanceKm - b.distanceKm;
-      });
-    }
+    const ordered = [...evaluatedProviders];
+    ordered.sort((a, b) => compareNearbyMonthlyProviders(a, b, hasCustomerID));
 
     const bestMatchCandidate = ordered.find(
       (p) =>
         p.monthlyAvailability.fullyAvailable &&
-        !p.hasCustomerOverlap
+        !p.hasCustomerOverlap &&
+        (p.monthlyAvailability.summary.vacationDays ?? 0) === 0
     );
     if (bestMatchCandidate) {
       bestMatchCandidate.bestMatch = true;
