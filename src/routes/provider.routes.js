@@ -13,6 +13,7 @@ import {
   loadActor,
 } from "../middleware/resourceAccess.js";
 import { languageKnownToArray } from "../utils/languageKnown.util.js";
+import { PROVIDER_REGISTRATION_LANGUAGES } from "../constants/providerRegistrationLanguages.js";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
@@ -469,6 +470,10 @@ WHERE
 */
 
 /* -------------------- ROUTE -------------------- */
+
+router.get("/languages", (_req, res) => {
+  res.json({ languages: PROVIDER_REGISTRATION_LANGUAGES });
+});
 
 router.get("/nearby", async (req, res) => {
   try {
@@ -1077,7 +1082,7 @@ async function runNearbyMonthlyDiscovery(bInput, qInput) {
       return Number.isFinite(n) && n > 0 ? n : null;
     })();
 
-     /* ---------- STEP 1: Nearby Providers WITH OR FILTER ---------- */
+     /* ---------- STEP 1: Nearby Providers WITH optional filters ---------- */
 
 const {
   experienceRange,
@@ -1087,27 +1092,17 @@ const {
   languages
 } = b;
 
-// /* 👉 Dynamic OR filter block */
 const filterQuery = `
+AND ($5::text IS NULL OR sp.experience BETWEEN split_part($5::text, '-', 1)::int AND split_part($5::text, '-', 2)::int)
+AND ($6::numeric IS NULL OR sp.rating >= $6::numeric)
+AND ($7::text IS NULL OR LOWER(sp.gender) = LOWER($7::text))
+AND ($8::text IS NULL OR LOWER(sp.diet) = LOWER($8::text))
 AND (
-  (
-    $5::text IS NOT NULL 
-    AND sp.experience BETWEEN 
-      split_part($5::text, '-', 1)::int 
-      AND 
-      split_part($5::text, '-', 2)::int
+  $9::text[] IS NULL OR EXISTS (
+    SELECT 1
+    FROM unnest($9::text[]) AS lang
+    WHERE LOWER(COALESCE(sp.languageknown::text, '')) LIKE '%' || LOWER(lang) || '%'
   )
-  OR ($6::numeric IS NOT NULL AND sp.rating >= $6::numeric)
-  OR ($7::text IS NOT NULL AND LOWER(sp.gender) = LOWER($7::text))
-  OR ($8::text IS NOT NULL AND LOWER(sp.diet) = LOWER($8::text))
-  OR (
-    $9::text[] IS NOT NULL AND EXISTS (
-      SELECT 1
-      FROM unnest($9::text[]) AS lang
-      WHERE LOWER(COALESCE(sp.languageknown, '')) LIKE '%' || LOWER(lang) || '%'
-    )
-  )
-  OR ($5 IS NULL AND $6 IS NULL AND $7 IS NULL AND $8 IS NULL AND $9 IS NULL)
 )
 `;
     /* ---------- STEP 1: Nearby Providers ---------- */
