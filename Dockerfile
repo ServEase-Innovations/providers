@@ -16,6 +16,9 @@ COPY . .
 # Set environment
 ENV NODE_ENV=production
 
+# Switch to non-root user
+USER node
+
 # Your app runs on 4000 (as per server.js)
 EXPOSE 4000
 
